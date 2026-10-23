@@ -158,6 +158,32 @@ export function getProbeResult() {
   return invoke<Record<string, unknown>>('get_probe_result')
 }
 
+// ─── Staging (翻译暂存窗，二开) ───
+
+/** 打开/刷新翻译暂存窗口并带去中文原文（Rust 侧同时捕获目标输入框句柄）。 */
+export function openStaging(zhText: string, mode: 'translate' | 'manual' = 'translate') {
+  return invoke<void>('open_staging', { request: { zhText, mode } })
+}
+
+export function closeStaging() {
+  return invoke<void>('close_staging')
+}
+
+/** 拉取最近一次暂存内容（窗口首次挂载时兜底，避免 emit 早于页面加载而丢事件）。 */
+export function getStagingPayload() {
+  return invoke<{
+    zhText: string
+    mode: string
+    targetHwnd: string
+    focusHwnd: string
+  } | null>('get_staging_payload')
+}
+
+/** 提交暂存内容到原目标输入框；raw=true 提交中文原文（Ctrl+Enter），否则提交翻译（Enter）。 */
+export function commitStaging(text: string, targetHwnd: string, focusHwnd: string, raw: boolean) {
+  return invoke<void>('staging_commit', { request: { text, targetHwnd, focusHwnd, raw } })
+}
+
 /** 一次原生捕获同时返回录音目标上下文与插字探测结果。 */
 export function getRecordingContext(includeTextContext = false) {
   return invoke<{
@@ -528,6 +554,23 @@ export function onPTTUp(cb: (data?: unknown) => void) {
 
 export function onPTTToggle(cb: (data?: unknown) => void) {
   const unlisten = listen<unknown>('ptt-toggle', (event) => cb(event.payload))
+  return () => { unlisten.then((fn) => fn()) }
+}
+
+// ─── 二开：翻译键 / 手动翻译键 ───
+
+export function onTranslateDown(cb: (data?: unknown) => void) {
+  const unlisten = listen<unknown>('tr-down', (event) => cb(event.payload))
+  return () => { unlisten.then((fn) => fn()) }
+}
+
+export function onTranslateUp(cb: (data?: unknown) => void) {
+  const unlisten = listen<unknown>('tr-up', (event) => cb(event.payload))
+  return () => { unlisten.then((fn) => fn()) }
+}
+
+export function onManualModeOn(cb: (data?: unknown) => void) {
+  const unlisten = listen<unknown>('manual-mode-on', (event) => cb(event.payload))
   return () => { unlisten.then((fn) => fn()) }
 }
 

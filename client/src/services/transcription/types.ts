@@ -6,7 +6,7 @@ import type { ClientRuntimeInfo } from '../../types/appApi'
 import type { AiConfigSnapshot, AiPolicy } from './aiPolicy'
 import type { ClientAiConfig } from './selectionAi'
 
-export type WorkMode = 'server' | 'cloud_api' | 'local'
+export type WorkMode = 'server' | 'cloud_api'
 
 export type ProviderState = 'disconnected' | 'connecting' | 'connected' | 'error'
 

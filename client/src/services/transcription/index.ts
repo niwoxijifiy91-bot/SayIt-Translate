@@ -1,11 +1,9 @@
 // Provider 管理器 — 根据 workMode 返回对应的 TranscriptionProvider
 
-import { invoke } from '@tauri-apps/api/core'
 import { getSetting } from '../store'
 import { addRuntimeEvent } from '../debugLog'
 import { ServerProvider } from './ServerProvider'
 import { CloudAPIProvider } from './CloudAPIProvider'
-import { LocalProvider } from './LocalProvider'
 import type { TranscriptionProvider, WorkMode } from './types'
 
 export type {
@@ -31,8 +29,6 @@ function createProvider(mode: WorkMode): TranscriptionProvider {
       return new ServerProvider()
     case 'cloud_api':
       return new CloudAPIProvider()
-    case 'local':
-      return new LocalProvider()
     default:
       addRuntimeEvent('warn', 'transcription', `Unknown processing mode "${mode}"; falling back to server mode`)
       return new ServerProvider()
@@ -73,15 +69,6 @@ export async function switchProvider(mode: WorkMode): Promise<TranscriptionProvi
     }
   }
 
-  // 离开本地模式时释放 sherpa-onnx recognizer 占用的内存（几百 MB ~ 数 GB），
-  // 否则切到云 API / 服务器模式后本地模型仍常驻到应用退出。
-  if (currentMode === 'local' && mode !== 'local') {
-    try {
-      await invoke('unload_local_model')
-    } catch (err) {
-      addRuntimeEvent('warn', 'transcription', 'Failed to release local model', { error: String(err) })
-    }
-  }
 
   currentMode = mode
   currentProvider = createProvider(mode)
@@ -91,7 +78,7 @@ export async function switchProvider(mode: WorkMode): Promise<TranscriptionProvi
 /** 从 store 读取保存的 workMode 并初始化 */
 export async function initProviderFromStore(): Promise<void> {
   const stored = await getSetting('workMode', 'server')
-  const mode = (stored === 'server' || stored === 'cloud_api' || stored === 'local') ? stored : 'server'
+  const mode = (stored === 'server' || stored === 'cloud_api') ? stored : 'server'
   currentMode = mode as WorkMode
   currentProvider = createProvider(currentMode)
   addRuntimeEvent('info', 'transcription', 'Provider initialized', { mode: currentMode })

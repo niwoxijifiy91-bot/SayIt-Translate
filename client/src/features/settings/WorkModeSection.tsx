@@ -12,19 +12,14 @@ import { getModeStatus, refreshModeStatus, subscribeModeStatus } from '@/stores/
 // 左下角的引擎指示里，服务器模式用的是信号图标而不是 Server——那里报的是"此刻通不通"，
 // 有一条真在跑的连接可报；这张卡不做这种断言（连接状态由卡组右上角那枚徽标负责）。
 // 两处对本地 / 云 API 用同一个图标，对服务器模式刻意不同，因为它们说的不是同一件事。
-import { Cpu, Cloud, Server, CheckCircle2, type LucideIcon } from 'lucide-react'
+import { Cloud, Server, CheckCircle2, type LucideIcon } from 'lucide-react'
 import type { WorkMode } from '@/services/transcription'
 import type { TranslationKey } from '@/i18n'
 import { useT } from '@/i18n/useT'
 
 // 模块级常量只求值一次，所以存 key、渲染时才翻。
 const modes: Array<{ value: WorkMode; labelKey: TranslationKey; descKey: TranslationKey; privacyKey: TranslationKey; icon: LucideIcon }> = [
-  {
-    value: 'local', labelKey: 'mode.local',
-    descKey: 'workMode.local.desc',
-    privacyKey: 'workMode.local.privacy',
-    icon: Cpu,
-  },
+
   {
     value: 'cloud_api', labelKey: 'mode.cloudApi',
     descKey: 'workMode.cloudApi.desc',

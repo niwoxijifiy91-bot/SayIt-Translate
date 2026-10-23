@@ -32,6 +32,13 @@ const LANGUAGE_OPTIONS = [
   { value: 'en', labelKey: 'language.en' },
 ] as const satisfies readonly { value: LanguagePreference; labelKey: TranslationKey }[]
 
+/** 触发方式（AHK 式）：hold=长按｜tap=点按｜multi=连击 */
+const TRIGGER_MODES = [
+  { value: 'hold', labelKey: 'settings.shortcuts.triggerHold' },
+  { value: 'tap', labelKey: 'settings.shortcuts.triggerTap' },
+  { value: 'multi', labelKey: 'settings.shortcuts.triggerMulti' },
+] as const satisfies readonly { value: string; labelKey: TranslationKey }[]
+
 function ShortcutLabel({ label, help }: { label: string; help: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -61,6 +68,11 @@ export default function GeneralSettingsPage() {
   const [pttKey, setPttKey] = useState(() => getDefault<string>('shortcutPTT', ''))
   const [handsFreeKey, setHandsFreeKey] = useState('AltRight')
   const [aiToggleKey, setAiToggleKey] = useState('')
+  // ── 二开：语音→翻译 / 手动翻译 键位与触发方式 ──
+  const [translateKey, setTranslateKey] = useState(() => getDefault<string>('shortcutTranslate', 'Delete'))
+  const [translateMode, setTranslateMode] = useState(() => getDefault<string>('triggerModeTranslate', 'hold'))
+  const [manualKey, setManualKey] = useState(() => getDefault<string>('shortcutManual', 'AltLeft+KeyY'))
+  const [manualMode, setManualMode] = useState(() => getDefault<string>('triggerModeManual', 'tap'))
   const [historyEnabled, setHistoryEnabled] = useState(true)
   const [audioRetentionEnabled, setAudioRetentionEnabled] = useState(true)
   const [audioRetentionDays, setAudioRetentionDays] = useState(30)
@@ -126,6 +138,10 @@ export default function GeneralSettingsPage() {
     getSetting<string>('shortcutPTT').then((value) => setPttKey(value))
     getSetting('shortcutHandsFree', 'AltRight').then((value) => setHandsFreeKey(value as string))
     getSetting('shortcutToggleAi', '').then((value) => setAiToggleKey(value as string))
+    getSetting<string>('shortcutTranslate', getDefault<string>('shortcutTranslate')).then((value) => setTranslateKey(value)).catch(() => { })
+    getSetting<string>('triggerModeTranslate', getDefault<string>('triggerModeTranslate')).then((value) => setTranslateMode(value)).catch(() => { })
+    getSetting<string>('shortcutManual', getDefault<string>('shortcutManual')).then((value) => setManualKey(value)).catch(() => { })
+    getSetting<string>('triggerModeManual', getDefault<string>('triggerModeManual')).then((value) => setManualMode(value)).catch(() => { })
     listMicrophones().then(setMics).catch(() => { })
     return () => { cancelled = true }
   }, [])
@@ -153,6 +169,11 @@ export default function GeneralSettingsPage() {
   const handleLogRetentionDaysChange = async (value: number) => { setLogRetentionDays(value); await setSetting('logRetentionDays', value) }
   const handlePTTChange = async (value: string) => { setPttKey(value); await setSetting('shortcutPTT', value); bridge.notifyShortcutsChanged(); refreshPTTSetting() }
   const handleHandsFreeChange = async (value: string) => { setHandsFreeKey(value); await setSetting('shortcutHandsFree', value); bridge.notifyShortcutsChanged(); refreshPTTSetting() }
+  // 二开：翻译键 / 手动翻译键 —— 改键或改触发方式都即时重配 Rust 热键
+  const handleTranslateKeyChange = async (value: string) => { setTranslateKey(value); await setSetting('shortcutTranslate', value); bridge.notifyShortcutsChanged(); refreshPTTSetting() }
+  const handleTranslateModeChange = async (value: string) => { setTranslateMode(value); await setSetting('triggerModeTranslate', value); bridge.notifyShortcutsChanged(); refreshPTTSetting() }
+  const handleManualKeyChange = async (value: string) => { setManualKey(value); await setSetting('shortcutManual', value); bridge.notifyShortcutsChanged(); refreshPTTSetting() }
+  const handleManualModeChange = async (value: string) => { setManualMode(value); await setSetting('triggerModeManual', value); bridge.notifyShortcutsChanged(); refreshPTTSetting() }
 
   // 应用内部快捷键互斥：免提和按住说话绑同一个键，两个功能会同时被触发；
   // 预设切换的组合键同理。提交前拦下来，而不是等用户按了才发现行为诡异。
@@ -180,6 +201,23 @@ export default function GeneralSettingsPage() {
     if (Object.values(presetShortcuts).includes(value)) return t('settings.shortcuts.conflictPreset')
     return null
   }, [pttKey, aiToggleKey])
+  // 二开校验：翻译键 / 手动翻译键 与其余热键互斥
+  const validateTranslate = useCallback(async (value: string) => {
+    if (!value) return null
+    if (pttShortcutConflictsWithAccelerator(value, pttKey)) return t('settings.shortcuts.conflictPtt')
+    if (pttShortcutConflictsWithAccelerator(value, handsFreeKey)) return t('settings.shortcuts.conflictHandsFree')
+    if (pttShortcutConflictsWithAccelerator(value, aiToggleKey)) return t('settings.shortcuts.conflictAiToggle')
+    if (pttShortcutConflictsWithAccelerator(value, manualKey)) return t('settings.shortcuts.conflictManual')
+    return null
+  }, [pttKey, handsFreeKey, aiToggleKey, manualKey])
+  const validateManual = useCallback(async (value: string) => {
+    if (!value) return null
+    if (pttShortcutConflictsWithAccelerator(value, pttKey)) return t('settings.shortcuts.conflictPtt')
+    if (pttShortcutConflictsWithAccelerator(value, handsFreeKey)) return t('settings.shortcuts.conflictHandsFree')
+    if (pttShortcutConflictsWithAccelerator(value, aiToggleKey)) return t('settings.shortcuts.conflictAiToggle')
+    if (pttShortcutConflictsWithAccelerator(value, translateKey)) return t('settings.shortcuts.conflictTranslate')
+    return null
+  }, [pttKey, handsFreeKey, aiToggleKey, translateKey])
 
   const drawWaveform = useCallback((analyser: AnalyserNode) => {
     const canvas = canvasRef.current; if (!canvas) return
@@ -286,6 +324,52 @@ export default function GeneralSettingsPage() {
                 label={<ShortcutLabel label={t('settings.shortcuts.ptt')} help={t('settings.shortcuts.pttHelp')} />}
                 description={t('settings.shortcuts.pttDesc')}
               />
+              {/* 二开：语音输入翻译（默认 Delete 长按） */}
+              <div className="border-t border-border pt-4">
+                <PTTShortcutInput
+                  value={translateKey}
+                  onChange={handleTranslateKeyChange}
+                  validate={validateTranslate}
+                  label={<ShortcutLabel label={t('settings.shortcuts.translate')} help={t('settings.shortcuts.translateHelp')} />}
+                  description={t('settings.shortcuts.translateDesc')}
+                />
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">{t('settings.shortcuts.triggerMode')}</span>
+                  <div className="shrink-0" style={ready ? undefined : { visibility: 'hidden' }}>
+                    <Segmented
+                      label={t('settings.shortcuts.triggerMode')}
+                      value={translateMode}
+                      options={TRIGGER_MODES.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
+                      onChange={(value) => void handleTranslateModeChange(value)}
+                      animated={animate}
+                      className="justify-end"
+                    />
+                  </div>
+                </div>
+              </div>
+              {/* 二开：文字输入翻译（默认 Alt+Y 点按） */}
+              <div className="border-t border-border pt-4">
+                <ComboShortcutInput
+                  value={manualKey}
+                  onChange={handleManualKeyChange}
+                  validate={validateManual}
+                  label={<ShortcutLabel label={t('settings.shortcuts.manual')} help={t('settings.shortcuts.manualHelp')} />}
+                  description={t('settings.shortcuts.manualDesc')}
+                />
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <span className="text-xs text-muted-foreground">{t('settings.shortcuts.triggerMode')}</span>
+                  <div className="shrink-0" style={ready ? undefined : { visibility: 'hidden' }}>
+                    <Segmented
+                      label={t('settings.shortcuts.triggerMode')}
+                      value={manualMode}
+                      options={TRIGGER_MODES.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))}
+                      onChange={(value) => void handleManualModeChange(value)}
+                      animated={animate}
+                      className="justify-end"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

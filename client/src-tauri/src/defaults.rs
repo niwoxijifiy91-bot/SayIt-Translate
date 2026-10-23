@@ -5,13 +5,21 @@
 //! 两种语言没法共用一个常量，所以下面的测试直接读 defaults.ts 的源码对账：
 //! 任何一边改了、另一边没跟上，`cargo test` 就红。
 
-/// 按住说话的默认键。不能是 Shift：长按右 Shift 约 8 秒会触发 Windows 筛选键，
-/// 松开后录音停不下来（前端 lib/shortcutKeys.ts 的 PTT_FORBIDDEN_CODES）。
-pub const SHORTCUT_PTT: &str = "ControlRight";
+/// 按住说话的默认键（二开语义键：语音原文上屏）。不能是 Shift：长按右 Shift 约 8 秒会
+/// 触发 Windows 筛选键，松开后录音停不下来（前端 lib/shortcutKeys.ts 的 PTT_FORBIDDEN_CODES）。
+pub const SHORTCUT_PTT: &str = "AltLeft";
 /// 免提模式的默认键。
 pub const SHORTCUT_HANDS_FREE: &str = "AltRight";
 /// AI 整理开关的快捷键。留空 = 不注册，避免升级时意外占用用户已有的全局组合键。
 pub const SHORTCUT_TOGGLE_AI: &str = "";
+/// 翻译键（二开）：按住说话 → 润色 + 翻译成英文，进入暂存窗口（默认 Delete，hold 触发）。
+pub const SHORTCUT_TRANSLATE: &str = "Delete";
+/// 手动翻译键（二开）：Alt+Y 点按打开手动输入 + 实时翻译（默认 tap 触发）。
+pub const SHORTCUT_MANUAL: &str = "AltLeft+KeyY";
+/// 翻译键触发模式默认值：hold=长按触发（长按说话、松开结束）。
+pub const TRIGGER_MODE_TRANSLATE: &str = "hold";
+/// 手动键触发模式默认值：tap=点按触发（开关式）。
+pub const TRIGGER_MODE_MANUAL: &str = "tap";
 
 /// WebDAV 备份默认只含配置：录音库能有几个 GB，网盘有流量额度，默认打开等于替用户做了很贵的决定。
 pub const WEBDAV_INCLUDE_HISTORY: bool = false;
@@ -49,6 +57,10 @@ mod tests {
         assert_eq!(ts_default("shortcutPTT"), json!(SHORTCUT_PTT));
         assert_eq!(ts_default("shortcutHandsFree"), json!(SHORTCUT_HANDS_FREE));
         assert_eq!(ts_default("shortcutToggleAi"), json!(SHORTCUT_TOGGLE_AI));
+        assert_eq!(ts_default("shortcutTranslate"), json!(SHORTCUT_TRANSLATE));
+        assert_eq!(ts_default("shortcutManual"), json!(SHORTCUT_MANUAL));
+        assert_eq!(ts_default("triggerModeTranslate"), json!(TRIGGER_MODE_TRANSLATE));
+        assert_eq!(ts_default("triggerModeManual"), json!(TRIGGER_MODE_MANUAL));
         assert_eq!(ts_default("webdav.includeHistory"), json!(WEBDAV_INCLUDE_HISTORY));
         assert_eq!(ts_default("webdav.includeAudio"), json!(WEBDAV_INCLUDE_AUDIO));
         assert_eq!(ts_default("webdav.keepCount"), json!(WEBDAV_KEEP_COUNT));
@@ -68,6 +80,8 @@ mod tests {
         assert_eq!(seed("shortcutPTT"), json!(SHORTCUT_PTT));
         assert_eq!(seed("shortcutHandsFree"), json!(SHORTCUT_HANDS_FREE));
         assert_eq!(seed("shortcutToggleAi"), json!(SHORTCUT_TOGGLE_AI));
+        assert_eq!(seed("shortcutTranslate"), json!(SHORTCUT_TRANSLATE));
+        assert_eq!(seed("shortcutManual"), json!(SHORTCUT_MANUAL));
         assert_eq!(seed("selectedMic"), ts_default("selectedMic"));
     }
 }

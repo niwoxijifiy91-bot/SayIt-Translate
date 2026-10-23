@@ -10,7 +10,6 @@ mod keyboard;
 mod context;
 mod inject;
 mod providers;
-mod models;
 mod defaults;
 mod net_policy;
 mod path_guard;
@@ -545,76 +544,31 @@ fn main() {
 
     // Read PTT setting before moving storage into managed state
     let ptt_setting_val = storage.get("shortcutPTT", None);
-    let ptt_str = ptt_setting_val.as_str().unwrap_or(defaults::SHORTCUT_PTT).to_string();
+    // 二开迁移：旧版本默认 PTT 是 ControlRight，新默认是 AltLeft（语义键）。
+    // 仅当用户存的仍是"旧默认"时迁移，自定义过的绑定保持不变。
+    let mut ptt_str = ptt_setting_val.as_str().unwrap_or(defaults::SHORTCUT_PTT).to_string();
+    if ptt_str == "ControlRight" {
+        ptt_str = defaults::SHORTCUT_PTT.to_string();
+        let _ = storage.set("shortcutPTT", &serde_json::json!(defaults::SHORTCUT_PTT));
+        log::info!("[migrate] shortcutPTT migrated old default ControlRight -> {}", ptt_str);
+    }
     let hf_setting_val = storage.get("shortcutHandsFree", None);
     let hf_str = hf_setting_val.as_str().unwrap_or(defaults::SHORTCUT_HANDS_FREE).to_string();
     let ai_toggle_setting_val = storage.get("shortcutToggleAi", None);
     let ai_toggle_str = ai_toggle_setting_val.as_str().unwrap_or(defaults::SHORTCUT_TOGGLE_AI).to_string();
+    // 二开新增：翻译键（默认 Delete）与手动键（默认 AltLeft+KeyY）。
+    let translate_setting_val = storage.get("shortcutTranslate", None);
+    let translate_str = translate_setting_val.as_str().unwrap_or(defaults::SHORTCUT_TRANSLATE).to_string();
+    let translate_mode_val = storage.get("triggerModeTranslate", None);
+    let translate_mode_str = translate_mode_val.as_str().unwrap_or(defaults::TRIGGER_MODE_TRANSLATE).to_string();
+    let manual_setting_val = storage.get("shortcutManual", None);
+    let manual_str = manual_setting_val.as_str().unwrap_or(defaults::SHORTCUT_MANUAL).to_string();
+    let manual_mode_val = storage.get("triggerModeManual", None);
+    let manual_mode_str = manual_mode_val.as_str().unwrap_or(defaults::TRIGGER_MODE_MANUAL).to_string();
     log::info!("PTT setting from DB: raw={:?} parsed={:?}", ptt_setting_val, ptt_str);
     log::info!("HF setting from DB: raw={:?} parsed={:?}", hf_setting_val, hf_str);
-
-    // 自定义模型存储目录：启动时读回并设为进程内生效路径（空串 = 用默认）。
-    // 必须在任何取模型路径的调用之前设定，且要在 storage 被 move 进 manage 之前读。
-    let models_dir_val = storage.get("localAsr.modelsDir", None);
-    if let Some(custom_dir) = models_dir_val.as_str().map(str::trim).filter(|s| !s.is_empty()) {
-        models::downloader::set_custom_models_dir(Some(std::path::PathBuf::from(custom_dir)));
-        log::info!("Custom models dir from DB: {}", custom_dir);
-    }
-
-    // ⚠️ 这里**故意不注册** ggml 计算后端。注册动作已下沉到 gguf_asr 的懒路径
-    // （ensure_loaded / describe_devices），别再把 init_backends() 加回启动路径。
-    //
-    // 为什么：注册会 dlopen exe 旁边所有 ggml 模块，其中 ggml-vulkan.dll 一被载入就
-    // 立刻 vk::createInstance() 建出真实的 Vulkan 上下文。放在这里意味着**云 API 和
-    // 服务器模式的用户也要付这笔钱**：实测白占约 36 MB 共享显存、让进程出现在任务
-    // 管理器的 GPU 进程列表里（连 engtype_compute 都登记上），还同步阻塞启动 80~520 ms
-    // —— 而这些模式一个模型都不会加载，收益是零。用户反馈"即便使用云 API 模式也持续
-    // 占用 GPU"就是这条。
-    //
-    // 另外 transcribe-cpp 的 init_backends 上游标注为 idempotent 但 NOT retryable，
-    // 进程内也没有反注册路径，所以一旦注册就撤不回来 —— 更不该无条件先做。
-
-    // 回收上一代 sherpa-onnx 时期的模型权重（新引擎读不了，只白占几百 MB ~ 1 GB）。
-    // 放后台线程，不让删除卡住启动。
-    models::local_asr::spawn_legacy_reclaim();
-
-    // 本地模式：启动就在后台把模型加载起来，别等用户第一次按热键才等几百毫秒~几秒。
-    // 非本地模式不加载，避免白占几百 MB 内存。
-    if storage.get("workMode", None).as_str() == Some("local") {
-        let model_id = storage
-            .get("localAsr.modelId", None)
-            .as_str()
-            .unwrap_or("sensevoice-small-gguf")
-            .to_string();
-        let accelerator = storage
-            .get("localAsr.accelerator", None)
-            .as_str()
-            .unwrap_or("auto")
-            .to_string();
-        // 必须跟着一起读：显卡选择是缓存 key 的一部分，这里传空（自动）而用户设了
-        // 具体某张卡的话，启动预热加载的引擎会在第一次口述时因 key 不符被整个丢掉
-        // 重载一遍 —— 预热白做，用户还要多等一次"卸旧 + 载新 + 预热"。
-        let gpu_device = storage
-            .get("localAsr.gpuDevice", None)
-            .as_str()
-            .unwrap_or("")
-            .to_string();
-        std::thread::spawn(move || {
-            match models::gguf_asr::preload(&model_id, &accelerator, &gpu_device) {
-                Ok(()) => log::info!("Startup local model warm-up completed: {}", model_id),
-                // 模型没下载是正常情况（新装用户），不当错误刷日志
-                Err(e) => log::info!("Startup local model warm-up skipped ({}): {}", model_id, e),
-            }
-        });
-    }
-
-    // 空闲超时卸载：默认让本地模型常驻，用户可在设置里选择 10 / 30 / 60 分钟。
-    // 守护线程始终只启动一个，0 表示仅监听动态配置、不执行卸载。
-    let idle_minutes = storage
-        .get("localAsr.unloadIdleMinutes", None)
-        .as_u64()
-        .unwrap_or(0);
-    models::gguf_asr::spawn_idle_unloader(idle_minutes);
+    log::info!("Translate setting from DB: raw={:?} parsed={:?} mode={}", translate_setting_val, translate_str, translate_mode_str);
+    log::info!("Manual setting from DB: raw={:?} parsed={:?} mode={}", manual_setting_val, manual_str, manual_mode_str);
 
     let window_state = WindowState::new();
     let keyboard_hook = KeyboardHookManager::new();
@@ -662,7 +616,16 @@ fn main() {
             }
 
             let hook: tauri::State<KeyboardHookManager> = app.state();
-            hook.start(app.handle(), &ptt_str, &hf_str, &ai_toggle_str);
+            hook.start(
+                app.handle(),
+                &ptt_str,
+                &hf_str,
+                &ai_toggle_str,
+                &translate_str,
+                &translate_mode_str,
+                &manual_str,
+                &manual_mode_str,
+            );
 
             // 每 60s 记录一次键盘钩子健康快照（[ptt-watchdog] 日志行），
             // 用于排查"过一段时间后 Alt 说话没反应"这类间歇性问题：
@@ -841,6 +804,11 @@ fn main() {
             commands::paste::get_recording_context,
             commands::paste::get_active_app_context,
             commands::paste::copy_text,
+            // Staging (翻译暂存窗)
+            commands::staging::open_staging,
+            commands::staging::close_staging,
+            commands::staging::staging_commit,
+            commands::staging::get_staging_payload,
             // System
             commands::system::get_client_runtime_info,
             commands::system::get_system_ui_language,
@@ -912,6 +880,7 @@ fn main() {
             commands::diagnostics::copy_diagnostics_zip,
             commands::diagnostics::read_log_file,
             commands::diagnostics::open_log_folder,
+            commands::test_audio::get_test_audio_b64,
             // Providers (cloud ASR / AI)
             providers::registry::cloud_polish,
             providers::registry::cloud_transcribe,
@@ -949,24 +918,6 @@ fn main() {
             providers::asr_gemini_live::gemini_live_send,
             providers::asr_gemini_live::gemini_live_finish,
             providers::asr_gemini_live::gemini_live_close,
-            // Models (local model management)
-            models::registry::list_available_models,
-            models::registry::list_downloaded_models,
-            models::registry::download_model,
-            models::registry::delete_model,
-            models::registry::open_models_folder,
-            models::registry::open_model_folder,
-            models::registry::get_models_dir,
-            models::registry::set_models_dir,
-            models::local_asr::local_transcribe,
-            models::local_asr::local_transcribe_raw,
-            models::local_asr::preload_local_model,
-            models::local_asr::unload_local_model,
-            models::local_asr::set_local_model_idle_unload,
-            models::local_asr::legacy_models_reclaimed_bytes,
-            models::gguf_asr::gguf_asr_diagnostics,
-            models::test_audio::run_asr_benchmark,
-            models::test_audio::get_test_audio_b64,
         ])
         .on_window_event(|window, event| {
             // 点击关闭按钮时隐藏到托盘，而不是退出

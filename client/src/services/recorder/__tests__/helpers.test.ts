@@ -156,10 +156,6 @@ describe('computeProcessingTimeoutMs', () => {
     expect(ms).toBeGreaterThanOrEqual(30000)
   })
 
-  it('local 模式至少 30s', () => {
-    const ms = computeProcessingTimeoutMs(1, 'local')
-    expect(ms).toBeGreaterThanOrEqual(30000)
-  })
 
   it('长音频超时更长', () => {
     const short = computeProcessingTimeoutMs(5, 'server')
@@ -167,12 +163,6 @@ describe('computeProcessingTimeoutMs', () => {
     expect(long).toBeGreaterThan(short)
   })
 
-  it('local 长录音按时长放宽：5 分钟录音不会在识别跑完前超时', () => {
-    // 原来本地最多等 45 s，而 5 分钟的录音实测要 55 s 左右
-    expect(computeProcessingTimeoutMs(300, 'local')).toBeGreaterThanOrEqual(120000)
-    expect(computeProcessingTimeoutMs(60, 'local')).toBe(45000) // 中等长度维持原值
-    expect(computeProcessingTimeoutMs(3000, 'local')).toBeLessThanOrEqual(180000)
-  })
 
   it('cloud_api 上限 90s', () => {
     const ms = computeProcessingTimeoutMs(600, 'cloud_api')

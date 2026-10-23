@@ -83,9 +83,6 @@ async function collectContext(
   if (workMode === 'cloud_api') {
     asrProvider = await getSetting('cloudAsr.provider', '') as string
     asrModel = await getSetting(`cloudAsr.${asrProvider}.model`, '') as string
-  } else if (workMode === 'local') {
-    asrProvider = 'local'
-    asrModel = await getSetting('localAsr.model', '') as string
   } else {
     asrProvider = 'server'
     asrModel = ''

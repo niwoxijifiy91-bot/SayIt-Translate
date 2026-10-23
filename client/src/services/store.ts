@@ -64,7 +64,7 @@ export interface HistoryRecord {
   /** 用户当时给出的正确文本。本地留一份，方便回看自己改了什么。 */
   asrCorrectedText?: string | null
   // 推理来源信息
-  workMode?: 'server' | 'cloud_api' | 'local'
+  workMode?: 'server' | 'cloud_api'
   asrProvider?: string   // 例如 "server" / "doubao" / "sensevoice-small"
   aiProvider?: string    // 例如 "server" / "openai_compat" / "ollama"
   aiModel?: string       // 例如 "deepseek-chat" / "qwen2.5:7b"

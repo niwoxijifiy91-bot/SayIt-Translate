@@ -170,44 +170,6 @@ export default function DiagnosticsPage() {
           }
         }
       }
-    } else if (workMode === 'local') {
-      const modelId = await getSetting('localAsr.modelId', '') as string
-      items.push({ id: 'asr', label: t('diagnostics.health.asr'), status: modelId ? 'ok' : 'error', detail: modelId || t('diagnostics.noModel') })
-      // 本地引擎实况：实际绑定的后端（确认 GPU 用上了没）+ 进程内存（模型常驻的真实占用）
-      try {
-        const d = await invoke<GgufDiagnostics>('gguf_asr_diagnostics')
-        items.push({
-          id: 'localEngine',
-          label: t('diagnostics.health.localEngine'),
-          status: 'ok',
-          detail: t('diagnostics.localEngineDetail', {
-            // 多显卡机器上光有 "vulkan" 答不了"用的哪张卡"，把实际绑定的设备一起写上
-            backend: d.loading_model
-              ? t('diagnostics.loadingModel', { model: d.loading_model })
-              : d.current_backend
-                ? d.current_device ? `${d.current_backend} · ${d.current_device}` : d.current_backend
-                : t('diagnostics.modelUnloaded'),
-            memory: d.process_memory_mb,
-            version: d.native_version,
-          }),
-        })
-        items.push({
-          id: 'compute',
-          label: t('diagnostics.health.compute'),
-          status: d.devices.length > 0 ? 'ok' : 'error',
-          detail: d.devices.length > 0
-            ? d.devices.map((dev) => t('diagnostics.deviceDetail', {
-              name: dev.name,
-              kind: dev.kind,
-              memory: dev.memory_mb > 0
-                ? t('diagnostics.deviceMemory', { memory: (dev.memory_mb / 1024).toFixed(0) })
-                : '',
-            })).join(t('diagnostics.deviceSeparator'))
-            : t('diagnostics.noCompute'),
-        })
-      } catch (err) {
-        items.push({ id: 'localEngine', label: t('diagnostics.health.localEngine'), status: 'error', detail: String(err) })
-      }
     } else {
       items.push({ id: 'asr', label: t('diagnostics.health.asr'), status: 'ok', detail: t('diagnostics.fromServer') })
     }

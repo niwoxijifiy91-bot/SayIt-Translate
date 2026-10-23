@@ -8,7 +8,6 @@
 // 有意从 store 直接读 workMode 而不是 getWorkMode()：后者要等 initProviderFromStore
 // 跑完才准，而侧边栏可能先挂载；读存储永远是真值，也避免了循环依赖。
 
-import { invoke } from '@tauri-apps/api/core'
 import { getSetting } from '../services/store'
 import { loadAsrProfiles } from '../features/settings/asrProfileStore'
 import {
@@ -19,7 +18,7 @@ import {
 } from '../features/settings/asrProviderCatalog'
 import { subscribeLocale, t } from '@/i18n'
 
-export type ModeStatusMode = 'server' | 'cloud_api' | 'local'
+export type ModeStatusMode = 'server' | 'cloud_api'
 
 export interface ModeStatus {
   mode: ModeStatusMode
@@ -81,31 +80,13 @@ function cloudProviderShort(provider: string): string {
 export async function refreshModeStatus(): Promise<void> {
   const stored = await getSetting('workMode', 'server') as string
   const mode: ModeStatusMode =
-    stored === 'local' || stored === 'cloud_api' ? stored : 'server'
+    stored === 'cloud_api' ? stored : 'server'
 
   let detail = ''
   let ready: boolean | null = null
   let blockedReason = ''
 
-  if (mode === 'local') {
-    const modelId = await getSetting('localAsr.modelId', 'sensevoice-small-gguf') as string
-    try {
-      const models = await invoke<{ id: string; name: string }[]>('list_available_models')
-      detail = models.find((m) => m.id === modelId)?.name ?? modelId
-    } catch {
-      detail = modelId
-    }
-    // 本地模式就绪 = 选中的模型已完整下载到本地
-    try {
-      const downloaded = await invoke<{ id: string; complete: boolean }[]>('list_downloaded_models')
-      ready = downloaded.some((m) => m.id === modelId && m.complete)
-      if (!ready) blockedReason = t('modeStatus.modelNotDownloaded')
-    } catch {
-      // 读不到本地模型列表时不敢断言就绪，按未就绪处理并说明原因
-      ready = false
-      blockedReason = t('modeStatus.modelListUnavailable')
-    }
-  } else if (mode === 'cloud_api') {
+  if (mode === 'cloud_api') {
     // 就绪与否看**启用中那份服务档案**，而不是各平台的原始键：同一家可以存多份，
     // 只有被启用的那份才决定录音时用什么。设置页与这里都从同一个列表读，不会打架。
     const state = await loadAsrProfiles()

@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite'
+import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import fs from 'fs'
@@ -40,6 +40,17 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     host: host || false,
+    fs: {
+      // 项目经 C:\Users\32770\Doubao junction → D:\豆包文件，vite 的 allow 匹配在
+      // 两种路径形态间失配（isFileLoadingAllowed 返回 false → 跳过 fs 读取 →
+      // 按静态原样输出未转译 TSX → 浏览器白屏）。strict:false 直接放行读取，
+      // 仅对 dev server 生效，不影响生产构建。
+      strict: false,
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        path.resolve(process.cwd()),
+      ],
+    },
     hmr: host ? { protocol: 'ws', host, port: 1421 } : undefined,
     watch: {
       ignored: ['**/src-tauri/**'],
@@ -59,6 +70,7 @@ export default defineConfig({
         overlay: path.resolve(__dirname, 'overlay.html'),
         trayMenu: path.resolve(__dirname, 'tray-menu.html'),
         updateNotification: path.resolve(__dirname, 'update-notification.html'),
+        staging: path.resolve(__dirname, 'staging.html'),
       },
     },
   },

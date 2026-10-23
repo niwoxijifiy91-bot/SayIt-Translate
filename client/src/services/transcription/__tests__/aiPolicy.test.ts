@@ -47,7 +47,7 @@ describe('resolveAiPolicy：路由与是否允许调用', () => {
     expect(p.reason).toBeUndefined()
   })
 
-  it.each(['local', 'cloud_api'] as const)('%s 模式一律 custom 路由', (workMode) => {
+  it.each(['cloud_api'] as const)('%s 模式一律 custom 路由', (workMode) => {
     // 这两种模式没有服务端 AI，serverAiSource 是残留值也不该影响路由
     expect(policy({ workMode, serverAiSource: 'managed' }).route).toBe('custom')
   })
@@ -88,7 +88,7 @@ describe('resolveAiPolicy：路由与是否允许调用', () => {
 })
 
 describe('serverShouldPolish：压成线上那个布尔', () => {
-  it.each(['local', 'cloud_api', 'server'] as const)('routes a separate selection model through client AI in %s mode', (workMode) => {
+  it.each(['cloud_api', 'server'] as const)('routes a separate selection model through client AI in %s mode', (workMode) => {
     const result = policy({ workMode, selectionAiOverride: true, integratedAsr: true })
     expect(result).toMatchObject({ route: 'custom', allowCall: true })
     expect(serverShouldPolish(result)).toBe(false)
@@ -188,7 +188,7 @@ describe('policyFromSnapshot：缓冲型 Provider 复原策略', () => {
   it('快照存在时按快照判，不读当前设置', () => {
     const p = policyFromSnapshot(
       { workMode: 'server', aiEnabled: true, aiMinDurationSec: 60, serverAiSource: 'custom' },
-      'local',
+      'cloud_api',
       4.8,
     )
     expect(p).toMatchObject({ route: 'custom', allowCall: false, reason: 'duration_below_min' })

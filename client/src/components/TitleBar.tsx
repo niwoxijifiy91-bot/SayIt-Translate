@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as bridge from '@/services/bridge'
 import { Minus, Square, X, Wand2 } from 'lucide-react'
-import appIcon from '@/assets/ico-frame-48x48.png'
+const appIcon = '/ico-frame-48x48.png'
 import { useAiEnabled, useAiEnabledReady } from '@/hooks/useAiEnabled'
 import { useActivePreset } from '@/hooks/useActivePreset'
 import { toggleAiEnabled } from '@/stores/aiEnabled'

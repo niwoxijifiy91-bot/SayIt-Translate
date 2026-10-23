@@ -308,15 +308,7 @@ export class HistoryWriter {
       const aiModel = finalResult?.aiModel || await getSetting('cloudAi.model', '') as string
       return { asrProvider, aiProvider: aiProvider || undefined, aiModel: aiModel || undefined, ...executionMeta }
     }
-    if (mode === 'local') {
-      const modelId = await getSetting('localAsr.modelId', '') as string
-      const aiEnabled = Boolean(await getSetting('aiEnabled', false))
-      const aiProvider = finalResult?.aiProvider
-        || (aiEnabled ? await getSetting('cloudAi.provider', '') as string : undefined)
-      const aiModel = finalResult?.aiModel
-        || (aiEnabled ? await getSetting('cloudAi.model', '') as string : undefined)
-      return { asrProvider: modelId || 'local', aiProvider, aiModel: aiModel || undefined, ...executionMeta }
-    }
+
     return executionMeta
   }
 }

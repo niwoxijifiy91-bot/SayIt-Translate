@@ -5,7 +5,7 @@ import { Github, Loader2, CheckCircle } from 'lucide-react'
 import { open as shellOpen } from '@tauri-apps/plugin-shell'
 import { getAutoUpdateState, onAutoUpdateChange, checkForUpdateNow, installPendingUpdate, type AutoUpdateState } from '@/features/update/autoUpdate'
 import { RELEASE_HIGHLIGHTS } from '@/features/update/releaseHighlights'
-import appIcon from '@/assets/icon-128.png'
+const appIcon = '/icon-128.png'
 import { getLocale, t } from '@/i18n'
 import { useT } from '@/i18n/useT'
 

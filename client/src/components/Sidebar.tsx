@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Home, Clock, BookOpen, Settings, Info, Wifi, WifiOff, Cpu, Cloud, AudioLines, Sparkles, Wand2 } from 'lucide-react'
+import { Home, Clock, BookOpen, Settings, Info, Wifi, WifiOff, Cloud, AudioLines, Sparkles, Wand2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Tooltip } from '@/components/ui/tooltip'
 import { useConnectionStatus } from '@/hooks/useConnectionStatus'
@@ -173,8 +173,8 @@ function ModeIndicator() {
     )
   }
 
-  const Icon = mode === 'local' ? Cpu : Cloud
-  const title = mode === 'local' ? t('mode.local') : t('mode.cloudApi')
+  const Icon = Cloud
+  const title = t('mode.cloudApi')
   const notReady = ready === false
   // blockedReason 目前是 Rust/服务层给的中文串（P2-1 会改成 code 再本地化）。
   // 这里只保证**外壳**跟随语言，不假装里面那句已经翻好了。

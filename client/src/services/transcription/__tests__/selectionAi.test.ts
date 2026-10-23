@@ -19,7 +19,7 @@ const profile = {
   id: 'editor', provider: 'openai_compat', apiUrl: 'https://editor.example/v1', apiKey: 'editor-secret', model: 'editor-model',
 }
 const policy = resolveAiPolicy({
-  workMode: 'local', aiEnabled: true, aiMinDurationSec: 0, serverAiSource: 'managed', audioDurationSec: 4,
+  workMode: 'cloud_api', aiEnabled: true, aiMinDurationSec: 0, serverAiSource: 'managed', audioDurationSec: 4,
 })
 
 function polish(selectionAiConfig: Awaited<ReturnType<typeof loadSelectionAiConfig>>, isCurrent = () => true) {

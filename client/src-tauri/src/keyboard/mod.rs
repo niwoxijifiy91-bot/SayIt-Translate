@@ -361,6 +361,10 @@ const SINGLE_KEY_TABLE: &[(&str, u32)] = &[
     ("Pause", 0x13),
     ("ScrollLock", 0x91),
     ("Insert", 0x2D),
+    // 二开翻译键（默认 Delete，hold 触发）：前端 SINGLE_KEYS 早已收录（0x2e），
+    // Rust 表此前缺它，ptt_key_config("Delete") 会因 valid_shape 落空而回退到默认键，
+    // 症状是「设置里是 Delete、实际监听别的键」（本模块有专门测试钉住）。
+    ("Delete", 0x2E),
     // 鼠标侧键：走 WH_MOUSE_LL 鼠标钩子（非键盘钩子），vk 用 Windows 的 VK_XBUTTON1/2。
     ("XButton1", 0x05),
     ("XButton2", 0x06),
@@ -678,6 +682,34 @@ struct HookSharedState {
     ai_toggle_key_down: AtomicBool,
     ai_toggle_vk_codes: Vec<u32>,
     ai_toggle_setting: String,
+    // ── 翻译键（语音→翻译，默认 Delete；hold/tap/multi 触发模式可配）──
+    translate_vk_codes: Vec<u32>,
+    translate_setting: String,
+    translate_mode: String,
+    /// 已吞下翻译键首个 down、正在等待判定（长按触发 or 短按放行）。
+    translate_armed: AtomicBool,
+    /// 翻译录音进行中（tr-down 已发，等待 up 结束）。
+    translate_active: AtomicBool,
+    /// 翻译键首个 down 的时间（长按阈值判定用）。
+    translate_down_ms: AtomicI64,
+    /// multi 模式连击计数与上一次 tap 时间。
+    translate_tap_count: AtomicU32,
+    translate_last_tap_ms: AtomicI64,
+    // ── 手动翻译键（默认 AltLeft+KeyY 点按；tap/multi 触发）──
+    manual_vk_codes: Vec<u32>,
+    manual_setting: String,
+    manual_mode: String,
+    /// 修饰键成员最近一次 down 的时间（-1 = 未按住），供主键的组合窗口判定。
+    manual_alt_down_ms: AtomicI64,
+    /// 主键已被吞（配对的 up 也要吞）。
+    manual_armed: AtomicBool,
+    /// 主键首次 down 时间（hold 长按阈值判定）。
+    manual_down_ms: AtomicI64,
+    /// hold 模式已在长按期间触发过（松开不重复触发）。
+    manual_fired: AtomicBool,
+    /// multi（连击）模式计数与上一次 tap 时间。
+    manual_tap_count: AtomicU32,
+    manual_last_tap_ms: AtomicI64,
     app_handle: AppHandle,
 }
 
@@ -689,6 +721,12 @@ enum HookAction {
     PttUp { vk: u32, gen: u64, reason: &'static str },
     HfToggle { vk: u32 },
     AiToggle { vk: u32 },
+    /// 翻译键触发（hold 长按判定通过 / tap 点按 / multi 连击达成）。
+    TranslateDown { vk: u32 },
+    /// 翻译键释放（hold 松开 / tap 再次点按结束）。
+    TranslateUp { vk: u32, reason: &'static str },
+    /// 手动翻译模式开启（Alt+Y 组合触发）。
+    ManualTrigger { vk: u32 },
     Escape { mode: u32, token: u64 },
     /// 悬浮窗卡片上的临时组合键（目前只有 Ctrl+C = 复制结果文本）。
     CardHotkey { action: u32, token: u64 },
@@ -699,6 +737,14 @@ enum HookAction {
 }
 
 const PTT_RELEASING_BIT: u64 = 1 << 63;
+
+/// 翻译键 hold 模式的长按判定阈值：按住超过该时长才开始翻译录音（毫秒）。
+/// 未达阈值的短按会原样放行给前台程序（重放 down+up），不吞键。
+const TRANSLATE_HOLD_MS: i64 = 300;
+/// 手动键 Alt+Y 的组合窗口：Alt 按下后在该窗口内按 Y 才算点按组合（毫秒）。
+const MANUAL_COMBO_WINDOW_MS: i64 = 300;
+/// 手动键/翻译键 multi（连击）模式：两次按下间隔小于该值才累计一次连击（毫秒）。
+const MULTI_TAP_WINDOW_MS: i64 = 500;
 
 /// 开始一次新的 PTT 代次。只有 active=0 才能发布新代次；释放方把旧 up 放进
 /// dispatcher 队列之前 active 始终非 0，因此不会出现 down(new) 排在 up(old) 前面。
@@ -732,6 +778,37 @@ fn begin_hf_press(key_down: &AtomicBool) -> bool {
 /// 清除免提按下状态。返回 true 表示确实存在一枚需要配对消费的 keyup。
 fn end_hf_press(key_down: &AtomicBool) -> bool {
     key_down.swap(false, Ordering::SeqCst)
+}
+
+/// 把被延迟吞掉的短按键原样重放给前台程序（down+up）。
+///
+/// 仅用于翻译键 hold 模式"未达长按阈值"的短按放行（如 Delete）：钩子先把 down 吞掉
+/// 做延迟判定，若在阈值内松开，就注入一对 down+up 让目标程序看到一次普通按键。
+/// 注入事件带 LLKHF_INJECTED 标志，会在幻影过滤处直接放行，不会再次进入本状态机，
+/// 因此不存在循环。要求回调内调用（回调本身不阻塞，SendInput 为 μs 级）。
+#[cfg(windows)]
+fn replay_key_press(vk: u32) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::*;
+    unsafe {
+        let mut down = INPUT {
+            r#type: INPUT_KEYBOARD,
+            ..std::mem::zeroed()
+        };
+        down.Anonymous.ki = KEYBDINPUT {
+            wVk: VIRTUAL_KEY(vk as u16),
+            ..std::mem::zeroed()
+        };
+        let mut up = INPUT {
+            r#type: INPUT_KEYBOARD,
+            ..std::mem::zeroed()
+        };
+        up.Anonymous.ki = KEYBDINPUT {
+            wVk: VIRTUAL_KEY(vk as u16),
+            dwFlags: KEYEVENTF_KEYUP,
+            ..std::mem::zeroed()
+        };
+        SendInput(&[down, up], std::mem::size_of::<INPUT>() as i32);
+    }
 }
 
 /// 幂等认领一次释放，但暂不允许下一次 down。认领者必须在 up 成功入队后调用
@@ -811,6 +888,38 @@ fn should_consume_combo_main_down(
     } else {
         pressed_mask & modifier_mask == modifier_mask
     }
+}
+
+/// 手动翻译键触发：先取消刚启动的 PTT（避免组合键误开语音录音），再发送 ManualTrigger。
+#[cfg(windows)]
+fn manual_fire(state: &HookSharedState, vk: u32) {
+    let ptt_young = state.ptt_active_generation.load(Ordering::SeqCst) != 0
+        && state
+            .ptt_last_down_ms
+            .first()
+            .map(|a| a.load(Ordering::SeqCst))
+            .is_some_and(|t| now_ms() - t < MANUAL_COMBO_WINDOW_MS);
+    if ptt_young {
+        clear_ptt_members(state);
+        HOOK_ACTION_TX.with(|tx| {
+            if let Some(sender) = tx.borrow().as_ref() {
+                let _ = queue_ptt_release(
+                    sender,
+                    &state.ptt_active_generation,
+                    None,
+                    vk,
+                    "manual_override",
+                );
+            }
+        });
+    }
+    HOOK_ACTION_TX.with(|tx| {
+        if let Some(sender) = tx.borrow().as_ref() {
+            if sender.send(HookAction::ManualTrigger { vk }).is_err() {
+                TRY_SEND_FAIL_COUNT.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    });
 }
 
 fn clear_ptt_members(state: &HookSharedState) {
@@ -1330,11 +1439,21 @@ impl KeyboardHookManager {
         }
     }
 
-    /// Start the keyboard hook with PTT, hands-free, and AI-cleanup single-key settings.
-    pub fn start(&self, app: &AppHandle, ptt_setting: &str, hf_setting: &str, ai_toggle_setting: &str) {
+    /// Start the keyboard hook with PTT, hands-free, AI-cleanup, translate and manual settings.
+    pub fn start(
+        &self,
+        app: &AppHandle,
+        ptt_setting: &str,
+        hf_setting: &str,
+        ai_toggle_setting: &str,
+        translate_setting: &str,
+        translate_mode: &str,
+        manual_setting: &str,
+        manual_mode: &str,
+    ) {
         crate::commands::system::write_log_line(&format!(
-            "[ptt-lifecycle] start() called ptt_setting={} hf_setting={} ai_toggle_setting={}",
-            ptt_setting, hf_setting, ai_toggle_setting,
+            "[ptt-lifecycle] start() called ptt_setting={} hf_setting={} ai_toggle_setting={} translate_setting={} translate_mode={} manual_setting={} manual_mode={}",
+            ptt_setting, hf_setting, ai_toggle_setting, translate_setting, translate_mode, manual_setting, manual_mode,
         ));
         let has_hook_thread = self.hook_thread.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).is_some();
         if self.running.load(Ordering::SeqCst) || has_hook_thread {
@@ -1360,6 +1479,17 @@ impl KeyboardHookManager {
         let ptt_last_down_ms = (0..ptt_config.vk_codes.len())
             .map(|_| AtomicI64::new(0))
             .collect();
+        let translate_config = ptt_key_config(translate_setting);
+        let manual_config = ptt_key_config(manual_setting);
+        // 触发模式白名单：非法值回退默认（hold / tap），避免状态机走到未定义分支。
+        let translate_mode = match translate_mode {
+            "tap" | "multi" => translate_mode,
+            _ => "hold",
+        };
+        let manual_mode = match manual_mode {
+            "multi" => manual_mode,
+            _ => "tap",
+        };
 
         let state = Arc::new(HookSharedState {
             ptt_vk_codes: ptt_config.vk_codes,
@@ -1379,6 +1509,23 @@ impl KeyboardHookManager {
             ai_toggle_key_down: AtomicBool::new(false),
             ai_toggle_vk_codes,
             ai_toggle_setting: ai_toggle_setting.to_string(),
+            translate_vk_codes: translate_config.vk_codes,
+            translate_setting: translate_config.setting,
+            translate_mode: translate_mode.to_string(),
+            translate_armed: AtomicBool::new(false),
+            translate_active: AtomicBool::new(false),
+            translate_down_ms: AtomicI64::new(0),
+            translate_tap_count: AtomicU32::new(0),
+            translate_last_tap_ms: AtomicI64::new(0),
+            manual_vk_codes: manual_config.vk_codes,
+            manual_setting: manual_config.setting,
+            manual_mode: manual_mode.to_string(),
+            manual_alt_down_ms: AtomicI64::new(-1),
+            manual_armed: AtomicBool::new(false),
+            manual_down_ms: AtomicI64::new(0),
+            manual_fired: AtomicBool::new(false),
+            manual_tap_count: AtomicU32::new(0),
+            manual_last_tap_ms: AtomicI64::new(0),
             app_handle: app.clone(),
         });
 
@@ -1474,16 +1621,35 @@ impl KeyboardHookManager {
         *self.shared_state.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
     }
 
-    /// Reconfigure with new PTT, hands-free, and AI-cleanup settings.
-    pub fn reconfigure(&self, app: &AppHandle, ptt_setting: &str, hf_setting: &str, ai_toggle_setting: &str) {
+    /// Reconfigure with new PTT, hands-free, AI-cleanup, translate and manual settings.
+    pub fn reconfigure(
+        &self,
+        app: &AppHandle,
+        ptt_setting: &str,
+        hf_setting: &str,
+        ai_toggle_setting: &str,
+        translate_setting: &str,
+        translate_mode: &str,
+        manual_setting: &str,
+        manual_mode: &str,
+    ) {
         let count = RECONFIGURE_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
         crate::commands::system::write_log_line(&format!(
-            "[ptt-lifecycle] reconfigure() #{} ptt_setting={} hf_setting={} ai_toggle_setting={} — waiting for old hook shutdown",
-            count, ptt_setting, hf_setting, ai_toggle_setting,
+            "[ptt-lifecycle] reconfigure() #{} ptt_setting={} hf_setting={} ai_toggle_setting={} translate_setting={} manual_setting={} — waiting for old hook shutdown",
+            count, ptt_setting, hf_setting, ai_toggle_setting, translate_setting, manual_setting,
         ));
         self.stop();
         // stop() 已 join 旧 hook 与 dispatcher，可直接启动新实例。
-        self.start(app, ptt_setting, hf_setting, ai_toggle_setting);
+        self.start(
+            app,
+            ptt_setting,
+            hf_setting,
+            ai_toggle_setting,
+            translate_setting,
+            translate_mode,
+            manual_setting,
+            manual_mode,
+        );
     }
 
     /// Set hands-free mode active (suppresses PTT up events temporarily)
@@ -1575,6 +1741,41 @@ impl KeyboardHookManager {
                         let _ = dispatch_state.app_handle.emit("toggle-ai-cleanup", serde_json::json!({
                             "source": "rust_hook",
                             "vk": vk,
+                        }));
+                    }
+                    HookAction::TranslateDown { vk } => {
+                        crate::commands::system::write_log_line(
+                            &format!("[RUST] [tr] down vk={} setting={}", vk, dispatch_state.translate_setting)
+                        );
+                        let _ = dispatch_state.app_handle.emit("tr-down", serde_json::json!({
+                            "source": "rust_hook",
+                            "vk": vk,
+                            "setting": dispatch_state.translate_setting,
+                            "reason": "keydown",
+                            "timestamp": chrono::Utc::now().timestamp_millis(),
+                        }));
+                    }
+                    HookAction::TranslateUp { vk, reason } => {
+                        crate::commands::system::write_log_line(
+                            &format!("[RUST] [tr] up vk={} setting={} reason={}", vk, dispatch_state.translate_setting, reason)
+                        );
+                        let _ = dispatch_state.app_handle.emit("tr-up", serde_json::json!({
+                            "source": "rust_hook",
+                            "vk": vk,
+                            "setting": dispatch_state.translate_setting,
+                            "reason": reason,
+                            "timestamp": chrono::Utc::now().timestamp_millis(),
+                        }));
+                    }
+                    HookAction::ManualTrigger { vk } => {
+                        crate::commands::system::write_log_line(
+                            &format!("[RUST] [manual] trigger vk={} setting={}", vk, dispatch_state.manual_setting)
+                        );
+                        let _ = dispatch_state.app_handle.emit("manual-mode-on", serde_json::json!({
+                            "source": "rust_hook",
+                            "vk": vk,
+                            "setting": dispatch_state.manual_setting,
+                            "timestamp": chrono::Utc::now().timestamp_millis(),
                         }));
                     }
                     HookAction::Escape { mode, token } => {
@@ -2370,6 +2571,211 @@ unsafe extern "system" fn low_level_keyboard_proc(
                         consumed = true;
                     }
                 }
+
+                // ── 翻译键（二开，默认 Delete）：hold/tap/multi 触发状态机 ──
+                let is_translate_key = !state.translate_vk_codes.is_empty()
+                    && state.translate_vk_codes.contains(&vk)
+                    && !is_ptt_key
+                    && !is_hf_key
+                    && !is_ai_toggle_key;
+                if is_translate_key {
+                    let is_down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
+                    let is_up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
+                    if is_down {
+                        // 诊断：翻译键 down 必留痕迹（区分「没按到」与「带修饰键被放行」）
+                        let diag_name = if modifiers_block_down {
+                            "translate-down-mod-blocked"
+                        } else if state.translate_armed.load(Ordering::SeqCst) {
+                            "translate-down-repeat"
+                        } else {
+                            "translate-down"
+                        };
+                        HOOK_ACTION_TX.with(|tx| {
+                            if let Some(sender) = tx.borrow().as_ref() {
+                                let _ = sender.send(HookAction::Diag {
+                                    vk,
+                                    msg_name: diag_name,
+                                    flags: kb_flags,
+                                    scan_code: kb_scan_code,
+                                });
+                            }
+                        });
+                        if modifiers_block_down {
+                            // 带修饰键（Ctrl/Shift/Alt+Delete）整条放行，归系统/程序。
+                        } else if !state.translate_armed.swap(true, Ordering::SeqCst) {
+                            // 首个真实 down：吞掉并进入延迟判定（长按触发 or 短按放行）。
+                            state.translate_down_ms.store(now_ms(), Ordering::SeqCst);
+                            consumed = true;
+                        } else {
+                            // repeat down：hold 模式按住超过阈值即开始翻译录音。
+                            if state.translate_mode == "hold"
+                                && !state.translate_active.load(Ordering::SeqCst)
+                                && now_ms() - state.translate_down_ms.load(Ordering::SeqCst)
+                                    >= TRANSLATE_HOLD_MS
+                            {
+                                state.translate_active.store(true, Ordering::SeqCst);
+                                HOOK_ACTION_TX.with(|tx| {
+                                    if let Some(sender) = tx.borrow().as_ref() {
+                                        if sender.send(HookAction::TranslateDown { vk }).is_err() {
+                                            TRY_SEND_FAIL_COUNT.fetch_add(1, Ordering::Relaxed);
+                                        }
+                                    }
+                                });
+                            }
+                            consumed = true;
+                        }
+                    } else if is_up {
+                        if state.translate_armed.swap(false, Ordering::SeqCst) {
+                            if state.translate_active.load(Ordering::SeqCst) {
+                                // 录音中松开：结束翻译录音（hold 松开 / tap 再次点按 / multi 结束）。
+                                state.translate_active.store(false, Ordering::SeqCst);
+                                HOOK_ACTION_TX.with(|tx| {
+                                    if let Some(sender) = tx.borrow().as_ref() {
+                                        if sender.send(HookAction::TranslateUp { vk, reason: "keyup" }).is_err() {
+                                            TRY_SEND_FAIL_COUNT.fetch_add(1, Ordering::Relaxed);
+                                        }
+                                    }
+                                });
+                                consumed = true;
+                            } else {
+                                match state.translate_mode.as_str() {
+                                    "tap" => {
+                                        // 点按：翻转翻译录音状态。
+                                        let was_active =
+                                            state.translate_active.swap(true, Ordering::SeqCst);
+                                        HOOK_ACTION_TX.with(|tx| {
+                                            if let Some(sender) = tx.borrow().as_ref() {
+                                                let action = if was_active {
+                                                    HookAction::TranslateUp { vk, reason: "tap_toggle" }
+                                                } else {
+                                                    HookAction::TranslateDown { vk }
+                                                };
+                                                if sender.send(action).is_err() {
+                                                    TRY_SEND_FAIL_COUNT.fetch_add(1, Ordering::Relaxed);
+                                                }
+                                            }
+                                        });
+                                        if was_active {
+                                            state.translate_active.store(false, Ordering::SeqCst);
+                                        }
+                                        consumed = true;
+                                    }
+                                    "multi" => {
+                                        // 连击：间隔 <500ms 累计；达 2 次触发开始。
+                                        let now = now_ms();
+                                        let last = state.translate_last_tap_ms.load(Ordering::SeqCst);
+                                        let count = if now - last < MULTI_TAP_WINDOW_MS {
+                                            state.translate_tap_count.fetch_add(1, Ordering::SeqCst) + 1
+                                        } else {
+                                            state.translate_tap_count.store(1, Ordering::SeqCst);
+                                            1
+                                        };
+                                        state.translate_last_tap_ms.store(now, Ordering::SeqCst);
+                                        if count >= 2 {
+                                            state.translate_tap_count.store(0, Ordering::SeqCst);
+                                            state.translate_active.store(true, Ordering::SeqCst);
+                                            HOOK_ACTION_TX.with(|tx| {
+                                                if let Some(sender) = tx.borrow().as_ref() {
+                                                    if sender.send(HookAction::TranslateDown { vk }).is_err() {
+                                                        TRY_SEND_FAIL_COUNT.fetch_add(1, Ordering::Relaxed);
+                                                    }
+                                                }
+                                            });
+                                        }
+                                        consumed = true;
+                                    }
+                                    _ => {
+                                        // hold 未达阈值：短按放行 —— 把吞掉的 down 原样重放。
+                                        replay_key_press(vk);
+                                        consumed = true;
+                                    }
+                                }
+                            }
+                        }
+                        // 未 armed 的 up（放行过的 down 的配对）不吞。
+                    }
+                }
+
+                // ── 手动翻译键（二开，默认 AltLeft+KeyY）──
+                // 通用驱动：组合键 = 前 N-1 个修饰键成员 + 最后 1 个主键；单键 = 只有主键。
+                // 修饰键成员：down 记录组合窗口起点（不吞，Alt+Tab 等系统组合照常工作）。
+                if !state.manual_vk_codes.is_empty()
+                    && state.manual_vk_codes.len() >= 2
+                    && state.manual_vk_codes[..state.manual_vk_codes.len() - 1].contains(&vk)
+                    && is_kdown
+                {
+                    state.manual_alt_down_ms.store(now_ms(), Ordering::SeqCst);
+                }
+
+                // ── 手动翻译键主键：单键（len==1）或组合窗口内按下触发 ──
+                if let Some(main_vk) = state.manual_vk_codes.last().copied() {
+                    if vk == main_vk
+                        && !is_ptt_key
+                        && !is_hf_key
+                        && !is_ai_toggle_key
+                        && !is_translate_key
+                    {
+                        let is_down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
+                        let is_up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
+                        // 组合窗口判定：单键总是命中；组合键要求修饰键在窗口内。
+                        let mods_in_window = state.manual_vk_codes.len() == 1
+                            || {
+                                let mods_down = state.manual_alt_down_ms.load(Ordering::SeqCst);
+                                mods_down >= 0 && now_ms() - mods_down < MANUAL_COMBO_WINDOW_MS
+                            };
+                        if is_down {
+                            if mods_in_window {
+                                if !state.manual_armed.swap(true, Ordering::SeqCst) {
+                                    // 首个真实 down：吞掉并进入延迟判定。
+                                    state.manual_down_ms.store(now_ms(), Ordering::SeqCst);
+                                    consumed = true;
+                                } else {
+                                    // repeat：hold 长按超过阈值触发一次（开窗后立即松开，不保持）。
+                                    if state.manual_mode == "hold"
+                                        && !state.manual_fired.load(Ordering::SeqCst)
+                                        && now_ms() - state.manual_down_ms.load(Ordering::SeqCst)
+                                            >= TRANSLATE_HOLD_MS
+                                    {
+                                        state.manual_fired.store(true, Ordering::SeqCst);
+                                        manual_fire(state, vk);
+                                    }
+                                    consumed = true;
+                                }
+                            }
+                            // else：修饰键不在窗口内 → 放行主键，不劫持普通输入。
+                        }
+                        if is_up && state.manual_armed.swap(false, Ordering::SeqCst) {
+                            consumed = true;
+                            let was_fired = state.manual_fired.swap(false, Ordering::SeqCst);
+                            if !was_fired {
+                                // tap / multi / hold 短按：松开时按模式判定。
+                                let fire = match state.manual_mode.as_str() {
+                                    "multi" => {
+                                        // 连击：间隔 <500ms 累计；达 2 次触发。
+                                        let now = now_ms();
+                                        let last = state.manual_last_tap_ms.load(Ordering::SeqCst);
+                                        let count = if now - last < MULTI_TAP_WINDOW_MS {
+                                            state.manual_tap_count.fetch_add(1, Ordering::SeqCst) + 1
+                                        } else {
+                                            state.manual_tap_count.store(1, Ordering::SeqCst);
+                                            1
+                                        };
+                                        state.manual_last_tap_ms.store(now, Ordering::SeqCst);
+                                        let fired = count >= 2;
+                                        if fired {
+                                            state.manual_tap_count.store(0, Ordering::SeqCst);
+                                        }
+                                        fired
+                                    }
+                                    _ => true,
+                                };
+                                if fire {
+                                    manual_fire(state, vk);
+                                }
+                            }
+                        }
+                    }
+                }
             }
         });
 
@@ -2386,8 +2792,8 @@ mod tests {
     use super::{
         active_card_hotkeys, begin_hf_press, begin_ptt_press, card_hotkey_action_name,
         claim_ptt_release, complete_ptt_release, end_hf_press, escape_action_mode_name,
-        is_injection_exempt_vk, is_mouse_button_setting, is_mouse_vk, modifier_kind,
-        press_ptt_member, ptt_key_config, release_ptt_member, set_card_hotkeys,
+        is_injection_exempt_vk, is_mouse_button_setting, is_mouse_vk, is_single_key_setting,
+        modifier_kind, press_ptt_member, ptt_key_config, release_ptt_member, set_card_hotkeys,
         set_escape_action_mode, should_consume_combo_main_down, single_key_requires_bare_press,
         CARD_HOTKEY_COPY, CARD_HOTKEY_DEADLINE_MS, CARD_HOTKEY_FOREGROUND, DEFAULT_PTT_SETTING,
         DEFAULT_PTT_VK, SINGLE_KEY_TABLE, needs_mouse_hook, hook_looks_removed,
@@ -2730,6 +3136,20 @@ mod tests {
             assert_eq!(config.setting, single, "{single} 应当是有效的单键设置");
             assert_eq!(config.vk_codes.len(), 1, "{single} 应当只有一个成员");
         }
+    }
+
+    /// 二开翻译键 Delete 必须是有效单键，且解析不能回落（曾因 SINGLE_KEY_TABLE
+    /// 缺 "Delete" 而静默回退到默认 PTT 键，翻译键按住毫无反应）。
+    #[test]
+    fn delete_is_valid_single_key_and_parses_to_vk_2e() {
+        let config = ptt_key_config("Delete");
+        assert_eq!(config.setting, "Delete", "Delete 应当被接受为有效单键，而不是回落");
+        assert_eq!(config.vk_codes, vec![0x2E], "Delete 应当解析出 VK_DELETE (0x2E)");
+        assert!(is_single_key_setting("Delete"), "Delete 应被视为单键（走键盘钩子）");
+        // 组合形态（手动键 AltLeft+KeyY）也应解析成功。
+        let manual = ptt_key_config("AltLeft+KeyY");
+        assert_eq!(manual.vk_codes, vec![0xA4, 0x59], "AltLeft+KeyY 应解析出 [0xA4, 0x59]");
+        assert_eq!(manual.modifier_mask, 1, "AltLeft 应被标记为修饰成员（index 0）");
     }
 
     /// F1–F24 必须全部在表里、且 vk 连续等于 0x70 + (n-1)。

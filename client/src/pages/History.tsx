@@ -324,58 +324,6 @@ async function reprocessViaCloudApi(
   }
 }
 
-/** 本地模式重新识别：调用 local_transcribe + 可选 cloud_polish，与 LocalProvider 一致 */
-async function reprocessViaLocal(
-  chunk: ArrayBuffer,
-  hotwords: string[],
-  ai: ReprocessAiContext,
-  systemPrompt: string | undefined,
-): Promise<ReprocessResult> {
-  const durationSec = (chunk.byteLength / 2) / 16000
-
-  const modelId = await getSetting('localAsr.modelId', 'sensevoice-small-gguf') as string
-  const language = await getSetting('localAsr.language', 'auto') as string
-  const accelerator = await getSetting('localAsr.accelerator', 'auto') as string
-  const gpuDevice = await getSetting('localAsr.gpuDevice', '') as string
-
-  // hotwords 在 GGUF 引擎上不支持（transcribe.cpp 只有 whisper 族接 initial prompt），
-  // 参数留着是为了不改调用方签名，后端会忽略。
-  void hotwords
-  const asrResult = await bridge.localTranscribeRaw(new Uint8Array(chunk), {
-    modelId, language, accelerator, gpuDevice,
-  })
-  const asrText = asrResult.text
-  const asrMs = asrResult.elapsed_ms
-
-  // 同云 API 重跑：改走共用润色，补上短语音门槛与执行状态（原来也是空 catch 吞掉失败）。
-  const policy = policyFromSnapshot(ai.snapshot, 'local', durationSec)
-  const polish = await polishWithClientAi({
-    asrText,
-    startOptions: {
-      runId: 1,
-      operationId: ai.context.operationId,
-      aiConfig: ai.snapshot,
-      systemPrompt,
-      source: 'history_reprocess',
-    },
-    policy,
-    outcomeContext: ai.context,
-    logSource: 'history',
-  })
-
-  return {
-    asrText,
-    llmText: polish?.llmText ?? asrText,
-    asrMs,
-    llmMs: polish?.llmMs ?? 0,
-    durationSec,
-    aiSource: polish?.aiSource,
-    aiStatus: polish?.aiStatus,
-    aiReason: polish?.aiReason,
-    aiProvider: polish?.aiProvider,
-    aiModel: polish?.aiModel,
-  }
-}
 
 /** 重新识别后写回历史记录所需的供应商元数据 */
 async function buildReprocessMetadata(
@@ -408,10 +356,7 @@ async function buildReprocessMetadata(
     const asrSelectedModel = await getSetting('cloudAsr.model', '') as string
     return { asrProvider: resolveAsrDisplayModel(asrProviderKey, asrSelectedModel), ...aiFields }
   }
-  if (workMode === 'local') {
-    const modelId = await getSetting('localAsr.modelId', '') as string
-    return { asrProvider: modelId || 'local', ...aiFields }
-  }
+
   return {
     asrProvider: (result.asrModel || result.asrEngine || 'server').replace(/^.*\//, ''),
     ...aiFields,
@@ -570,8 +515,6 @@ export default function History() {
     let result: ReprocessResult
     if (workMode === 'cloud_api') {
       result = await reprocessViaCloudApi(chunk, hotwords, ai, systemPrompt)
-    } else if (workMode === 'local') {
-      result = await reprocessViaLocal(chunk, hotwords, ai, systemPrompt)
     } else {
       result = await reprocessViaServer(chunk, hotwords, ai, systemPrompt, clientMeta)
     }

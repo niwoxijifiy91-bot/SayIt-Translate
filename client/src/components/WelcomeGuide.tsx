@@ -18,7 +18,7 @@ import {
   checkShortcutBeforeCommit,
 } from '@/features/settings/ShortcutInputs'
 import { refreshPTTSetting, setShortcutCaptureActive } from '@/services/webviewKeyboardFallback'
-import appIcon from '@/assets/icon-128.png'
+const appIcon = '/icon-128.png'
 import { t, type TranslationKey } from '@/i18n'
 import { useT } from '@/i18n/useT'
 

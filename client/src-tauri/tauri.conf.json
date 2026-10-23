@@ -37,8 +37,7 @@
       "msi"
     ],
     "resources": {
-      "resources/*": "resources/",
-      "transcribe-libs/*": "./"
+      "resources/*": "resources/"
     },
     "icon": [
       "icons/icon.ico",

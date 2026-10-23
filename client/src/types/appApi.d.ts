@@ -188,6 +188,9 @@ export interface AppAPI {
   onPTTDown: (cb: (data?: unknown) => void) => void
   onPTTUp: (cb: (data?: unknown) => void) => void
   onPTTToggle: (cb: (data?: unknown) => void) => void
+  onTranslateDown: (cb: (data?: unknown) => void) => void
+  onTranslateUp: (cb: (data?: unknown) => void) => void
+  onManualModeOn: (cb: (data?: unknown) => void) => void
   onPTTTimeoutWarning: (cb: (data?: unknown) => void) => void
   onToggleHandsFree: (cb: (data?: unknown) => void) => void
   onPTTLabEvent: (cb: (data?: unknown) => void) => () => void

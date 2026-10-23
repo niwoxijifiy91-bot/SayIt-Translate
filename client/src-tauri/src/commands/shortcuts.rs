@@ -30,9 +30,27 @@ pub fn shortcuts_changed(
     let hf_key = hf_val.as_str().unwrap_or(crate::defaults::SHORTCUT_HANDS_FREE);
     let ai_toggle_val = storage.get("shortcutToggleAi", None);
     let ai_toggle_key = ai_toggle_val.as_str().unwrap_or(crate::defaults::SHORTCUT_TOGGLE_AI);
+    // 二开：翻译键（Delete）与手动键（Alt+Y）及各自触发模式
+    let translate_val = storage.get("shortcutTranslate", None);
+    let translate_key = translate_val.as_str().unwrap_or(crate::defaults::SHORTCUT_TRANSLATE);
+    let translate_mode_val = storage.get("triggerModeTranslate", None);
+    let translate_mode = translate_mode_val.as_str().unwrap_or(crate::defaults::TRIGGER_MODE_TRANSLATE);
+    let manual_val = storage.get("shortcutManual", None);
+    let manual_key = manual_val.as_str().unwrap_or(crate::defaults::SHORTCUT_MANUAL);
+    let manual_mode_val = storage.get("triggerModeManual", None);
+    let manual_mode = manual_mode_val.as_str().unwrap_or(crate::defaults::TRIGGER_MODE_MANUAL);
 
-    // Reconfigure PTT + hands-free + AI cleanup single-key/mouse hook
-    hook.reconfigure(&app, ptt_str, hf_key, ai_toggle_key);
+    // Reconfigure PTT + hands-free + AI cleanup + translate/manual single-key/mouse hook
+    hook.reconfigure(
+        &app,
+        ptt_str,
+        hf_key,
+        ai_toggle_key,
+        translate_key,
+        translate_mode,
+        manual_key,
+        manual_mode,
+    );
 
     // 重新注册所有 global_shortcut（免提组合键 + 各润色模式切换快捷键）
     register_all_global_shortcuts(&app, storage.inner());

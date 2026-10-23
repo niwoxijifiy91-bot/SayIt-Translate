@@ -175,12 +175,6 @@ export function computeProcessingTimeoutMs(
     const cloudTimeout = 30000 + Math.ceil(safeAudioSec * 500)
     timeout = Math.min(Math.max(timeout, cloudTimeout), 90000)
   }
-  if (providerMode === 'local') {
-    // 本地识别耗时跟录音长度成正比。原来最长只等 45 秒：实测 Qwen3-ASR 1.7B 在集成显卡上
-    // 约 0.18 倍时长（长录音按 30 s 切块后也是这个速度），5 分钟的录音要 55 秒左右，
-    // 必然超时，结果只能事后进历史。按 0.4 倍留出余量，最多 3 分钟。
-    const localTimeout = 15000 + Math.ceil(safeAudioSec * 400)
-    timeout = Math.min(Math.max(timeout, localTimeout), 180000)
-  }
+
   return timeout
 }

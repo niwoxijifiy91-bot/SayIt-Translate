@@ -6,7 +6,9 @@ use std::sync::Mutex;
 
 /// 新库的种子值。JSON 字面量用不了常量，快捷键几项与 crate::defaults 的对账在 defaults.rs 的测试里。
 pub(crate) const DEFAULT_SETTINGS: &[(&str, &str)] = &[
-    ("shortcutPTT", r#""ControlRight""#),
+    ("shortcutPTT", r#""AltLeft""#),
+    ("shortcutTranslate", r#""Delete""#),
+    ("shortcutManual", r#""AltLeft+KeyY""#),
     ("shortcutPTTCombo", r#""Alt+Q""#),
     ("shortcutHandsFree", r#""AltRight""#),
     ("shortcutToggleAi", r#""""#),

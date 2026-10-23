@@ -29,10 +29,19 @@ export const DEFAULTS: Record<string, unknown> = {
   // ⚠️ 改这里要同步 Rust：src-tauri/src/defaults.rs 和 storage/mod.rs 的种子。
   // defaults.rs 里有读本文件的对账测试，漏改 cargo test 会红。
   // 对账测试按「key: '值',」逐行解析，这几行保持单行字面量。
-  shortcutPTT: 'ControlRight',
+  shortcutPTT: 'AltLeft',
   shortcutHandsFree: 'AltRight', // 免提模式。默认右 Alt 单键。也支持组合键格式如 'Control+Shift+S'
   // AI 整理总开关。留空 = 不注册，避免升级时意外占用用户已有的全局组合键。
   shortcutToggleAi: '',
+  // ── 二开：语音→翻译 / 手动翻译 ──
+  // 翻译键：按住说话 → 润色 + 翻译成英文，进入暂存窗口（检查后回车才填入）。默认 Delete，hold 触发。
+  shortcutTranslate: 'Delete',
+  // 手动翻译键：点按打开手动输入 + 实时翻译（Enter 填入译文、Ctrl+Enter 原文、Esc 不提交）。
+  // 默认 Alt+Y（AltLeft+KeyY），tap 触发。
+  shortcutManual: 'AltLeft+KeyY',
+  // 触发模式：hold=长按（按住触发、松开结束）｜tap=点按（开关式）｜multi=连击（默认 2 连击）。
+  triggerModeTranslate: 'hold',
+  triggerModeManual: 'tap',
 
   // ── 麦克风 ──
   selectedMic: '', // 设备 ID，空字符串 = 系统默认
@@ -93,28 +102,6 @@ export const DEFAULTS: Record<string, unknown> = {
   // 既在逻辑修好后自愈，又不把用户主动删掉的卡救回来。
   'cloudAsr.autoCreatedProviders': [],
 
-  // ── ASR（本地）──
-  // 可选值就是 catalog.rs 里那几个 id：'sensevoice-small-gguf'（默认，最快）
-  // | 'funasr-nano-2512-gguf' | 'qwen3-asr-0.6b-gguf'
-  // | 'qwen3-asr-1.7b-q4-gguf' | 'qwen3-asr-1.7b-gguf'（最准）
-  'localAsr.modelId': 'sensevoice-small-gguf',
-  'localAsr.language': 'auto', // 可选: 'auto' | 'zh' | 'en' | 'ja' | 'ko'
-  // GGUF 权重目前只发在 HuggingFace（handy-computer 组织下），国内走镜像更稳。
-  // 值要和 catalog 里 DownloadSource.source 的名字完全一致，否则会回落到第一个源。
-  'localAsr.downloadSource': 'HuggingFace Mirror', // 可选: 'HuggingFace Mirror' | 'HuggingFace'
-  'localAsr.model': '',
-  // GGUF 引擎的计算后端偏好。'auto' = 有 GPU 用 GPU、没有自动用 CPU。
-  // 没装 GPU 加速包的机器永远是 CPU，这个值不影响功能，只影响速度。
-  'localAsr.accelerator': 'auto', // 可选: 'auto' | 'cpu' | 'gpu'
-  // 多显卡机器上指定用哪张卡。空串 = 交给引擎自动挑（独显优先）。
-  // 值是 GgufDevice.id（后端报的 PCI 总线 id，拿不到时回落成 "kind:name"），
-  // **不是** registry 索引 —— 索引会随驱动更新变动，存索引等于让用户的选择
-  // 在某次驱动更新后静默指向另一张卡。设置界面只在检测到两张以上 GPU 时出现。
-  'localAsr.gpuDevice': '',
-  // 本地模型空闲多少分钟后卸载（实测释放 350 MB ~ 2.6 GB 内存）。0 = 从不卸载。
-  // 默认常驻，保证下一次识别无需重新付“加载 + 预热”的等待；内存紧张的用户可在
-  // 本地模式设置中选择空闲 10 / 30 / 60 分钟后自动释放。
-  'localAsr.unloadIdleMinutes': 0,
 
   // ── 服务器 ──
   // 可选: 'auto' | 'zh' | 'en'。随每次识别发给服务端，由 asr.py 的 _resolve_language

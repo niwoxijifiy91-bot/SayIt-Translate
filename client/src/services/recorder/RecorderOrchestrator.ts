@@ -192,6 +192,9 @@ export class RecorderOrchestrator {
   /** 历史记录的写入、取消后的清理，以及「哪些代被用户主动取消」。 */
   private readonly history = new HistoryWriter(this.audioArchive)
 
+  /** M2：当前录音代的目标模式。normal = 原文上屏；translate = 结果进翻译暂存窗。 */
+  private activeMode: 'normal' | 'translate' = 'normal'
+
   private handsFreeMode = false
   private pttSuppressed = false
   private lastToggleTime = 0
@@ -397,8 +400,7 @@ export class RecorderOrchestrator {
     switch (this.provider.mode) {
       case 'server':
         return t('recorder.serverDisconnected')
-      case 'local':
-        return t('recorder.modelNotDownloaded')
+
       default:
         return t('recorder.serviceNotReady')
     }
@@ -581,6 +583,48 @@ export class RecorderOrchestrator {
       }
       addRuntimeEvent('info', 'ptt', 'event:toggle accepted', this.getPTTEventContext(payload))
       this.pttToggle(false)
+    })
+
+    // ── 二开：翻译键 / 手动翻译键（M1：事件透传 + 日志；M2/M3 接录音与暂存窗）──
+    bridge.onTranslateDown((payload) => {
+      addRuntimeEvent('info', 'translate', 'event:tr-down received', { payload })
+      // M2：翻译模式按住说话。复用 PTT 录音链路，结果分流到暂存窗。
+      if (this.state === 'idle' && !this.pttSuppressed) {
+        this.activeMode = 'translate'
+        addRuntimeEvent('info', 'translate', 'event:tr-down accepted -> startRecording(translate)', {})
+        void this.startRecording()
+        return
+      }
+      addRuntimeEvent('info', 'translate', 'event:tr-down ignored', {
+        ignoreReason: this.state !== 'idle' ? 'state_not_idle' : 'ptt_suppressed',
+      })
+    })
+
+    bridge.onTranslateUp((payload) => {
+      addRuntimeEvent('info', 'translate', 'event:tr-up received', { payload })
+      if (this.activeMode !== 'translate') {
+        addRuntimeEvent('info', 'translate', 'event:tr-up ignored', { ignoreReason: 'not_translate_mode' })
+        return
+      }
+      if (this.state === 'recording') {
+        addRuntimeEvent('info', 'translate', 'event:tr-up accepted -> stopRecording(translate)', {})
+        void this.stopRecording()
+        return
+      }
+      if (this.startRecordingLock) {
+        addRuntimeEvent('info', 'translate', 'event:tr-up deferred — startRecording in progress', {})
+        this.run.pendingStopWhileStarting = true
+        return
+      }
+      addRuntimeEvent('info', 'translate', 'event:tr-up ignored', { ignoreReason: 'state_not_recording' })
+    })
+
+    bridge.onManualModeOn((payload) => {
+      addRuntimeEvent('info', 'translate', 'event:manual-mode-on received', { payload })
+      // M3：Alt+Y 点按 → 打开空暂存窗（手动输入 + 实时翻译，Enter 填入英文）。
+      void bridge.openStaging('', 'manual').catch((err) => {
+        addRuntimeEvent('warn', 'translate', 'Failed to open manual staging window', { error: String(err) })
+      })
     })
 
     bridge.onToggleHandsFree((payload) => {
@@ -1283,6 +1327,28 @@ export class RecorderOrchestrator {
     const { runId } = options
     const allowWhenIdle = options.allowWhenIdle === true
     if (!this.isRunCurrent(runId)) return
+
+    // M2：翻译模式（Delete 长按）结果不进输入框，打开暂存窗让用户检查/编辑后再提交。
+    if (this.activeMode === 'translate') {
+      addRuntimeEvent('info', 'translate', 'Translate-mode result -> staging window', {
+        runId,
+        textLen: text.length,
+      })
+      this.activeMode = 'normal'
+      const stagedText = text
+      this.overlayService.hide()
+      void bridge.openStaging(stagedText, 'translate').catch((err) => {
+        addRuntimeEvent('warn', 'translate', 'Failed to open staging window; falling back to direct insertion', {
+          error: String(err),
+        })
+        void this.handleTextInsertion(stagedText, { allowWhenIdle, runId })
+      })
+      this.finishRun(runId)
+      if (this.state === 'processing') {
+        this.resetToIdle()
+      }
+      return
+    }
 
     // Guard: if we're no longer in processing (e.g. timeout fired), bail out unless this
     // is the explicitly retained late-final path.

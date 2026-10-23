@@ -57,7 +57,6 @@ export async function initLanguage(): Promise<Locale> {
  */
 export async function initLocaleDefaults(locale: Locale): Promise<void> {
   const defaults: Record<string, string> = {
-    'localAsr.downloadSource': locale === 'en' ? 'HuggingFace' : 'HuggingFace Mirror',
     'cloudAi.provider': locale === 'en' ? 'openrouter' : 'deepseek',
     'ai.builtinPromptLanguage': locale === 'en' ? 'en' : 'zh-CN',
   }

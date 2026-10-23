@@ -76,14 +76,7 @@ export default function AsrTestSection({ workMode }: { workMode: WorkMode }) {
       const pcmBytes = wavBytes.slice(44)
       const audioDurationSec = pcmBytes.length / 2 / 16000
 
-      if (workMode === 'local') {
-        const modelId = await getSetting('localAsr.modelId', 'sensevoice-small-gguf') as string
-        const language = await getSetting('localAsr.language', 'auto') as string
-        const r = await invoke<{ text: string; elapsed_ms: number; model_id: string }>('run_asr_benchmark', {
-          modelId, language,
-        })
-        setResult({ text: r.text, asrMs: r.elapsed_ms, mode: 'local', model: r.model_id, audioDurationSec })
-      } else if (workMode === 'cloud_api') {
+      if (workMode === 'cloud_api') {
         let pcmB64 = ''
         const chunk = 8192
         for (let i = 0; i < pcmBytes.length; i += chunk) {
@@ -236,7 +229,7 @@ export default function AsrTestSection({ workMode }: { workMode: WorkMode }) {
           <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span className="rounded bg-primary/10 px-2 py-0.5 text-primary">
-                {t(result.mode === 'local' ? 'asrTest.modeLocal' : result.mode === 'cloud_api' ? 'asrTest.modeCloudApi' : 'asrTest.modeServer')}
+                {t(result.mode === 'cloud_api' ? 'asrTest.modeCloudApi' : 'asrTest.modeServer')}
               </span>
               <span className="rounded bg-muted px-2 py-0.5">{result.mode === 'server' ? t('asrTest.serverModel') : result.model}</span>
               <span>{t('asrTest.audioLen', { sec: result.audioDurationSec.toFixed(1) })}</span>
