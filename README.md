@@ -8,11 +8,13 @@
 
 Open-source voice typing for Windows. Press a shortcut and speak—SayIt transcribes, cleans up, and inserts polished text wherever your cursor is.
 
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
-[![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://github.com/crosswk/SayIt/releases/latest)
-[![Latest release](https://img.shields.io/github/v/release/crosswk/SayIt?label=release)](https://github.com/crosswk/SayIt/releases/latest)
+> Community fork based on [crosswk/SayIt](https://github.com/crosswk/SayIt), released under AGPL-3.0. This fork adds voice-to-English translation, a live manual translation window, and configurable translation shortcuts, while removing local ASR. See [MODIFICATIONS.md](MODIFICATIONS.md) for the full change list.
 
-**[Download for Windows](https://github.com/crosswk/SayIt/releases/latest)** · **[Try the web demo](https://sayitapp.site)** · **[简体中文](README.zh-CN.md)**
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
+[![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://github.com/niwoxijifiy91-bot/SayIt/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/niwoxijifiy91-bot/SayIt?label=release)](https://github.com/niwoxijifiy91-bot/SayIt/releases/latest)
+
+**[Download this fork](https://github.com/niwoxijifiy91-bot/SayIt/releases/latest)** · **[Fork changes](MODIFICATIONS.md)** · **[Original project](https://github.com/crosswk/SayIt)** · **[简体中文](README.zh-CN.md)**
 
 </div>
 
@@ -31,7 +33,7 @@ Typing is often the slowest part of working with AI. SayIt turns speech into tex
 - **Voice typing anywhere** — dictate into editors, chat apps, browsers, and other Windows software.
 - **Editable AI cleanup** — remove filler words, repair recognition errors, format ideas, or keep a faithful transcript. Every prompt is yours to change.
 - **Context-aware writing** (off by default) — reads the text around your cursor so new dictation matches its tone and terminology. Select text first and your speech becomes an editing instruction—translate, tighten, rewrite, or ask a question—replacing the selection directly. Selection edits use your current AI model by default; choose a separate saved model in AI cleanup → Context awareness. Password fields are skipped.
-- **Flexible speech recognition** — use a cloud ASR provider, run a local GGUF model on your own GPU, connect to the public trial server, or host your own backend.
+- **Flexible speech recognition** — use a cloud ASR provider, connect to the public trial server, or host your own backend.
 - **English and Chinese interface** — the UI follows your system language and can be switched at any time.
 - **Hotwords and per-app rules** — improve names and technical terms, then change cleanup behavior automatically for different apps.
 - **Overlay feedback** — a small waveform overlay shows recording state and elapsed time, with optional live captions while you speak.
@@ -42,11 +44,10 @@ Typing is often the slowest part of working with AI. SayIt turns speech into tex
 
 | Mode | Best for | Data flow |
 | --- | --- | --- |
-| **Local mode** | Privacy and offline use | Speech recognition stays on your PC. With AI cleanup off, nothing leaves the device. |
 | **Cloud API mode** | The best balance for personal use | Your PC talks directly to the ASR and AI providers you configure. No SayIt server is involved. |
 | **Server mode** | Teams and managed deployments | Audio is processed by a SayIt backend you control—or by the public trial server for a quick start. |
 
-Local recognition ships seven GGUF models, with GPU acceleration when available: Parakeet Unified EN (fastest and most accurate for English), SenseVoice Small, Fun-ASR Nano, Nemotron 3.5 ASR (32 languages), and three Qwen3-ASR sizes. Cloud recognition supports Doubao, Qwen, OpenAI, Gemini, OpenRouter, Xiaomi MiMo, and Groq Whisper, plus any OpenAI-compatible service at an address you supply; AI cleanup works with DeepSeek, Qwen, Doubao, Zhipu GLM, MiMo, Groq, Ollama, and any OpenAI-compatible endpoint.
+Cloud recognition supports Doubao, Qwen, OpenAI, Gemini, OpenRouter, Xiaomi MiMo, and Groq Whisper, plus any OpenAI-compatible service at an address you supply; AI cleanup works with DeepSeek, Qwen, Doubao, Zhipu GLM, MiMo, Groq, Ollama, and any OpenAI-compatible endpoint.
 
 ## A closer look
 
@@ -58,9 +59,9 @@ Local recognition ships seven GGUF models, with GPU acceleration when available:
 
 <br>
 
-<img src="docs/images/readme/voice-engine-en.png" width="760" alt="Voice engine settings with Local, Cloud API, and Server mode cards above the model list">
+<img src="docs/images/readme/voice-engine-en.png" width="760" alt="Voice engine screen from the original SayIt project">
 
-*Voice engine — choose Local, Cloud API, or Server mode, then download and switch recognition models. Detected GPUs are used automatically.*
+*Voice engine — screenshot from the original SayIt project; this fork keeps Cloud API and Server modes and removes local ASR.*
 
 <br>
 
@@ -88,20 +89,29 @@ Local recognition ships seven GGUF models, with GPU acceleration when available:
 
 </div>
 
+## What this fork adds
+
+- Hold `Delete` to dictate, review the source text and live English translation, then confirm before insertion.
+- Press `Alt+Y` to open the manual translation window and translate Chinese as you type.
+- Press `Enter` to insert English, `Ctrl+Enter` to insert the source text, `Esc` to cancel, or `Shift+Enter` for a new line.
+- Configure the keys and choose hold, tap, or multi-press triggering for each input mode.
+
+Translation uses the existing SayIt AI-provider pipeline. Local ASR has been removed from this fork, so configure a cloud speech-recognition provider and an AI provider before use.
+
 ## Get started
 
-1. Download the latest [Windows installer](https://github.com/crosswk/SayIt/releases/latest).
+1. Download the latest [Windows installer for this fork](https://github.com/niwoxijifiy91-bot/SayIt/releases/latest).
 2. Open SayIt and choose a voice engine. The default public server is enough for a quick trial.
 3. Press the configured shortcut in any app and speak. By default you press once to start and again to finish; hold-to-talk is available too, under a separate shortcut.
 
-For regular use, choose Local mode or add your own cloud provider keys from the in-app settings. The provider console links are available beside each key field.
+For regular use, add your own cloud ASR and AI-provider keys from the in-app settings. The provider console links are available beside each key field.
 
 ## Self-hosting
 
 The backend combines FastAPI, WebSocket streaming, Qwen3-ASR, and an optional OpenAI-compatible cleanup model. Docker Compose is the recommended deployment path.
 
 ```bash
-git clone https://github.com/crosswk/SayIt.git
+git clone https://github.com/niwoxijifiy91-bot/SayIt.git
 cd SayIt/server
 cp config.example.yaml config.yaml
 cp .env.example .env
@@ -133,7 +143,7 @@ npm install
 npm run tauri dev
 ```
 
-Requirements: Node.js 18+, Rust 1.75+, CMake 3.20+, and the Vulkan SDK. The first native build compiles the C++ speech engine and may take around 20 minutes; later builds use the cache.
+Requirements: Node.js 18+, Rust 1.75+, and Visual Studio Build Tools with MSVC. This fork removes local ASR, so CMake and the Vulkan SDK are not required.
 
 On non-English Windows installations, set `CL=/utf-8` before building so MSVC reads UTF-8 source files correctly.
 
@@ -162,7 +172,7 @@ SayIt/
 
 ## Community
 
-Follow the WeChat official account for release announcements, or scan the group code to talk things over with other users. Both are Chinese-language channels — for English, open a [GitHub issue](https://github.com/crosswk/SayIt/issues).
+The QR codes below belong to the original SayIt community. For this fork, open an [issue in this repository](https://github.com/niwoxijifiy91-bot/SayIt/issues).
 
 <div align="center">
 
@@ -177,13 +187,13 @@ Follow the WeChat official account for release announcements, or scan the group 
 
 ## Contributing
 
-Bug reports, focused pull requests, and feature discussions are welcome. Please open a [GitHub issue](https://github.com/crosswk/SayIt/issues) or read the [contribution guide](CONTRIBUTING.md) before submitting a larger change.
+Bug reports, focused pull requests, and feature discussions are welcome. Please open a [GitHub issue](https://github.com/niwoxijifiy91-bot/SayIt/issues) or read the [contribution guide](CONTRIBUTING.md) before submitting a larger change.
 
 ## Contributors
 
 <!-- ALL-CONTRIBUTORS-LIST:START -->
-| [<img src="https://github.com/crosswk.png" width="60"><br><sub>crosswk</sub>](https://github.com/crosswk) | [<img src="https://avatars.githubusercontent.com/u/76263028" width="60"><br><sub>Claude (Anthropic)</sub>](https://claude.ai) |
-|:---:|:---:|
+| [<img src="https://github.com/crosswk.png" width="60"><br><sub>crosswk (original author)</sub>](https://github.com/crosswk) | [<img src="https://github.com/niwoxijifiy91-bot.png" width="60"><br><sub>Fork maintainer</sub>](https://github.com/niwoxijifiy91-bot) | [<img src="https://avatars.githubusercontent.com/u/76263028" width="60"><br><sub>Claude (Anthropic)</sub>](https://claude.ai) |
+|:---:|:---:|:---:|
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ## License

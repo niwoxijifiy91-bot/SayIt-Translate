@@ -1,5 +1,8 @@
 **简体中文** · [English](README.md)
 
+> [!IMPORTANT]
+> 这是 SayIt 的社区二开版本，基于原作者 **crosswk** 的 [SayIt](https://github.com/crosswk/SayIt) 开发，并继续采用 AGPL-3.0 许可证开源。二开版新增语音输入翻译、手动输入实时翻译和翻译暂存窗口，同时精简了本地 ASR 模块。完整差异见 [二开修改说明](MODIFICATIONS.md)。
+
 <div align="center">
 
 <img src="docs/images/readme/icon.png" width="80" height="80" alt="SayIt">
@@ -13,9 +16,9 @@
 按下快捷键开始说话，再按一次，润色后的文字自动输入到光标位置。
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
-[![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://github.com/crosswk/SayIt/releases)
+[![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://github.com/niwoxijifiy91-bot/SayIt/releases)
 
-**[下载客户端](https://github.com/crosswk/SayIt/releases/latest)** · **[网页版体验](https://sayitapp.site)** · **[配置文档](docs/)**
+**[下载二开版客户端](https://github.com/niwoxijifiy91-bot/SayIt/releases/latest)** · **[二开功能说明](MODIFICATIONS.md)** · **[原项目](https://github.com/crosswk/SayIt)**
 
 **视频介绍：[我做了一个开源 AI 语音输入法——SayIt](https://www.bilibili.com/video/BV1JLTs6REPU/)**（B 站）
 
@@ -43,9 +46,9 @@
 
 <br>
 
-<img src="docs/images/readme/voice-engine-zh.png" width="760" alt="语音引擎：本地 / 云 API / 服务器三种工作模式与 ASR 服务卡片">
+<img src="docs/images/readme/voice-engine-zh.png" width="760" alt="原版 SayIt 语音引擎界面">
 
-*语音引擎 — 在本地、云 API、服务器三种模式间切换，并配置对应的识别服务。卡片上的耗时是用内置测试音频真跑一次测出来的*
+*语音引擎 — 此图来自原版 SayIt；二开版保留云 API 与服务器模式，已移除本地 ASR*
 
 <br>
 
@@ -75,7 +78,7 @@
 
 ---
 
-## 为什么做 SayIt
+## 原项目背景（原作者说明）
 
 在 AI 时代，模型的输出 Token 速度越来越快，人却受限于打字速度。特别是和 AI 对话时，说话是非常自然和高效的方式。
 
@@ -95,13 +98,22 @@ SayIt 后端部署使用的是 Qwen3-ASR，效果仅次于豆包，开源模型�
 
 这是一个开源项目，我没有准备用它盈利。做这个纯粹是我个人对语音输入的需求很强，而且现在 AI 极大地放大了个人的能力。如果你觉得这个产品好用，可以点一个 ⭐ Star，这会激励我继续维护这个项目，或者在软件主页给我反馈。
 
+## 二开版新增功能
+
+- **语音输入翻译**：默认长按 `Delete` 说话，松开后得到中文原文与英文译文；中文可继续编辑，英文会实时更新。
+- **手动输入翻译**：默认按 `Alt+Y` 打开翻译暂存窗口，输入中文即可同步生成英文。
+- **确认后再上屏**：`Enter` 提交英文，`Ctrl+Enter` 提交中文原文，`Esc` 取消，`Shift+Enter` 换行。
+- **快捷键可配置**：语音输入、语音翻译与手动翻译均可设置按键及长按、点按、连击触发方式。
+
+翻译复用 SayIt 的 AI 供应商配置。二开版本已移除本地 ASR，使用前请在设置中配置云端语音识别与 AI 供应商。更多实现与行为差异见 [MODIFICATIONS.md](MODIFICATIONS.md)。
+
 ## 下载使用
 
-**大部分用户直接下载客户端即可，无需任何配置。**
+**二开版需要配置云端 ASR 与 AI 供应商，才能使用语音识别、润色和翻译。**
 
-[下载 Windows 安装包](https://github.com/crosswk/SayIt/releases/latest)
+[下载二开版 Windows 安装包](https://github.com/niwoxijifiy91-bot/SayIt/releases/latest)
 
-安装后默认连接我提供的公共服务器，开箱即用。服务器端的 AI 使用的是 Groq 提供的 OpenAI 120B 模型，会有免费的请求限制。
+安装后可连接原项目提供的公共体验服务器试用基础语音输入；语音翻译与手动翻译需要在设置中配置自己的 AI 供应商。
 
 也可以先通过 [网页版 Demo](https://sayitapp.site) 快速体验 ASR 的识别速度和效果，无需安装任何东西。
 
@@ -133,7 +145,7 @@ SayIt 后端部署使用的是 Qwen3-ASR，效果仅次于豆包，开源模型�
 适合对数据隐私有要求、或需要内网部署的场景。使用 Qwen3-ASR 1.7B 模型在 GPU 服务器上进行本地推理：
 
 ```bash
-git clone https://github.com/crosswk/SayIt.git
+git clone https://github.com/niwoxijifiy91-bot/SayIt.git
 cd SayIt/server
 cp config.example.yaml config.yaml
 cp .env.example .env
@@ -166,9 +178,9 @@ cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000
 - **全局语音输入** — 在任何应用中按下快捷键即可口述，文字自动插入光标位置
 - **AI 智能润色** — 口语自动转书面语，去口癖、纠错、分段，Prompt 完全可自定义
 - **上下文感知**（默认关闭）— 开启后会读取光标附近的文本，让新说的话在语气、术语和格式上与前后文衔接；先选中一段文字再开口，说出的话会被当成对它的编辑指令（翻译、精简、改写或提问），处理完直接替换选中内容。选区编辑默认沿用当前 AI 模型，也可在「AI 整理 → 上下文感知」中选择单独的已保存模型。密码框会自动跳过
-- **多种语音识别** — 云端可选豆包、千问、OpenAI、Gemini、OpenRouter、小米 MiMo、Groq Whisper，也可以填自己的地址接入任意 OpenAI 兼容服务；本地离线识别有 7 档 GGUF 模型（Parakeet Unified EN、SenseVoice、Fun-ASR Nano、Nemotron 3.5、Qwen3-ASR 三档），可用显卡加速
+- **多种语音识别** — 云端可选豆包、千问、OpenAI、Gemini、OpenRouter、小米 MiMo、Groq Whisper，也可以填自己的地址接入任意 OpenAI 兼容服务
 - **中英双语界面** — 默认跟随系统语言，也可以在设置里随时切换
-- **热词增强** — 自定义专业术语词表；豆包、千问、服务器模式会参与 ASR 识别偏置，本地模型和不支持热词的云端服务则通过 AI 整理/文本处理做后处理纠错，热词页会说明当前配置属于哪种
+- **热词增强** — 自定义专业术语词表；豆包、千问、服务器模式会参与 ASR 识别偏置，不支持热词的云端服务则通过 AI 整理/文本处理做后处理纠错
 - **悬浮窗反馈** — 录音状态、波形动画、按住时长实时可见；豆包、千问实时 ASR 下还能边说边出字幕
 - **历史记录** — 所有转录结果本地保存，支持搜索和收藏
 - **隐私可控** — 支持完全自部署，数据流向透明
@@ -205,7 +217,7 @@ SayIt/
 | 桌面客户端　　 | Tauri v2、React、TypeScript、Tailwind CSS　　　　　　|
 | 客户端系统集成 | Rust（全局键盘钩子、剪贴板、SQLite）　　　　　　　　 |
 | 后端服务　　　 | Python、FastAPI、WebSocket　　　　　　　　　　　　　 |
-| 语音识别　　　 | Qwen3-ASR + vLLM / 豆包 / 千问 / OpenAI / Gemini / OpenRouter / MiMo / Groq / ggml (GGUF) |
+| 语音识别　　　 | Qwen3-ASR + vLLM / 豆包 / 千问 / OpenAI / Gemini / OpenRouter / MiMo / Groq |
 | AI 润色　　　　| DeepSeek / 通义千问 / 豆包 / 智谱 GLM / 小米 MiMo / Groq / Ollama / OpenAI 兼容 |
 | 部署　　　　　 | Docker Compose、NVIDIA Container Toolkit　　　　　　 |
 | 开发　　　　　 | 整个项目使用 Claude Opus 开发　　　　　　　　　　　　|
@@ -220,19 +232,7 @@ npm install
 npm run tauri dev
 ```
 
-前置要求：Node.js 18+、Rust 1.75+、CMake 3.20+、Vulkan SDK
-
-本地离线识别基于 transcribe.cpp（GGUF/ggml）：构建时要用 CMake 编译原生库，并用
-Vulkan SDK 的 `glslc` 编译 SPIR-V 着色器，缺任一项都会中断构建。首次构建会从源码
-编译整棵 C++ 树（约 20 分钟），之后走缓存。
-
-两个容易卡住的点：
-
-- 装完 CMake / Vulkan SDK 请**新开一个终端**。PATH 和 `VULKAN_SDK` 的改动不会进入
-  已经在运行的 shell（包括编辑器内置终端），否则会报 `is cmake not installed?` 或
-  `Could NOT find Vulkan`，而环境变量看起来明明是对的。
-- 中文等非英文 Windows 需设 `CL=/utf-8`。否则 MSVC 按系统代码页读取 UTF-8 源文件，
-  会在只是注释里有非 ASCII 字符的地方报出一串看不懂的语法错误。
+前置要求：Node.js 18+、Rust 1.75+、Visual Studio Build Tools（含 MSVC）。二开版已移除本地 ASR，不需要 CMake 或 Vulkan SDK。中文等非英文 Windows 如遇源码编码报错，可在构建前设置 `CL=/utf-8`。
 
 ### 服务端
 
@@ -267,8 +267,8 @@ cd backend && uvicorn app.main:app --port 8000
 ## Contributors
 
 <!-- ALL-CONTRIBUTORS-LIST:START -->
-| [<img src="https://github.com/crosswk.png" width="60"><br><sub>crosswk</sub>](https://github.com/crosswk) | [<img src="https://avatars.githubusercontent.com/u/76263028" width="60"><br><sub>Claude (Anthropic)</sub>](https://claude.ai) |
-|:---:|:---:|
+| [<img src="https://github.com/crosswk.png" width="60"><br><sub>crosswk（原作者）</sub>](https://github.com/crosswk) | [<img src="https://github.com/niwoxijifiy91-bot.png" width="60"><br><sub>二开维护</sub>](https://github.com/niwoxijifiy91-bot) | [<img src="https://avatars.githubusercontent.com/u/76263028" width="60"><br><sub>Claude (Anthropic)</sub>](https://claude.ai) |
+|:---:|:---:|:---:|
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ## 许可证
