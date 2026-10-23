@@ -8,7 +8,7 @@ import '../index.css'
 
 // Transparent background for overlay window
 const style = document.createElement('style')
-style.textContent = 'html, body, #root { background: transparent !important; }'
+style.textContent = 'html, body, #root { margin: 0; padding: 0; background: transparent !important; overflow: hidden; height: 100%; }'
 document.head.appendChild(style)
 
 void startWebviewKeyboardFallback()

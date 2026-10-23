@@ -65,12 +65,15 @@ export default defineConfig({
     // 生产构建移除 console.log 和 debugger（保留 console.warn/error）
     minify: 'esbuild',
     rollupOptions: {
+      // 用相对路径而非 path.resolve：项目经 C:\Users\32770\Doubao junction → D:\豆包文件，
+      // resolve 出的绝对路径（D: 中文 realpath）会被 rollup 当作非法 fileName（vite:build-html 报错）。
+      // 相对路径由 vite 相对 root 自动解析，fileName 保持相对名，dev 与 build 均正常。
       input: {
-        main: path.resolve(__dirname, 'index.html'),
-        overlay: path.resolve(__dirname, 'overlay.html'),
-        trayMenu: path.resolve(__dirname, 'tray-menu.html'),
-        updateNotification: path.resolve(__dirname, 'update-notification.html'),
-        staging: path.resolve(__dirname, 'staging.html'),
+        main: 'index.html',
+        overlay: 'overlay.html',
+        trayMenu: 'tray-menu.html',
+        updateNotification: 'update-notification.html',
+        staging: 'staging.html',
       },
     },
   },
