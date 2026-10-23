@@ -1,141 +1,96 @@
 <div align="center">
 
-<img src="docs/images/readme/icon.png" width="80" height="80" alt="SayIt">
+<img src="docs/images/readme/icon.png" width="80" height="80" alt="SayIt Translate">
 
-# SayIt
+# SayIt Translate
 
-**Just say it, and write well**
+**说中文，直接得到英文。**
 
-Open-source voice typing for Windows. Press a shortcut and speak—SayIt transcribes, cleans up, and inserts polished text wherever your cursor is.
+一款面向 Windows 的全局语音输入与 AI 实时翻译工具。
 
-> Community fork based on [crosswk/SayIt](https://github.com/crosswk/SayIt), released under AGPL-3.0. This fork adds voice-to-English translation, a live manual translation window, and configurable translation shortcuts, while removing local ASR. See [MODIFICATIONS.md](MODIFICATIONS.md) for the full change list.
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://github.com/niwoxijifiy91-bot/SayIt-Translate/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/niwoxijifiy91-bot/SayIt-Translate?label=release)](https://github.com/niwoxijifiy91-bot/SayIt-Translate/releases/latest)
 
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
-[![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)](https://github.com/niwoxijifiy91-bot/SayIt/releases/latest)
-[![Latest release](https://img.shields.io/github/v/release/niwoxijifiy91-bot/SayIt?label=release)](https://github.com/niwoxijifiy91-bot/SayIt/releases/latest)
-
-**[Download this fork](https://github.com/niwoxijifiy91-bot/SayIt/releases/latest)** · **[Fork changes](MODIFICATIONS.md)** · **[Original project](https://github.com/crosswk/SayIt)** · **[简体中文](README.zh-CN.md)**
+**[下载 Windows 安装包](https://github.com/niwoxijifiy91-bot/SayIt-Translate/releases/latest)** · **[查看完整改动](MODIFICATIONS.md)** · **[English](README.en.md)**
 
 </div>
 
-<div align="center">
+SayIt Translate 适合需要频繁进行中英文沟通的人：跨境与外贸从业者、出海开发者、留学生，以及希望用中文思考、直接输出英文的用户。
 
-<img src="docs/images/readme/demo-en.gif" width="820" alt="SayIt in action: pressing the shortcut, speaking, and the cleaned-up text appearing at the cursor">
+按住快捷键说中文，松开后会出现翻译暂存窗口。你可以核对和修改中文，英文会自动更新；确认无误后按回车，译文会直接填入刚才正在使用的输入框。
 
-*Trigger the shortcut, speak, and the cleaned-up text is typed in at your cursor — no window switching.*
+![语音输入翻译：中文原文与英文译文在暂存窗口中对照显示](docs/images/translate/voice-translation.png)
 
-</div>
+## 这次二开增加了什么
 
-## Why SayIt?
+### 1. 语音输入翻译
 
-Typing is often the slowest part of working with AI. SayIt turns speech into text you can use immediately, while keeping the important choices in your hands:
+默认按住 `Delete` 说话：
 
-- **Voice typing anywhere** — dictate into editors, chat apps, browsers, and other Windows software.
-- **Editable AI cleanup** — remove filler words, repair recognition errors, format ideas, or keep a faithful transcript. Every prompt is yours to change.
-- **Context-aware writing** (off by default) — reads the text around your cursor so new dictation matches its tone and terminology. Select text first and your speech becomes an editing instruction—translate, tighten, rewrite, or ask a question—replacing the selection directly. Selection edits use your current AI model by default; choose a separate saved model in AI cleanup → Context awareness. Password fields are skipped.
-- **Flexible speech recognition** — use a cloud ASR provider, connect to the public trial server, or host your own backend.
-- **English and Chinese interface** — the UI follows your system language and can be switched at any time.
-- **Hotwords and per-app rules** — improve names and technical terms, then change cleanup behavior automatically for different apps.
-- **Overlay feedback** — a small waveform overlay shows recording state and elapsed time, with optional live captions while you speak.
-- **Transparent data flow** — the app shows which mode is active and where audio and text are processed.
-- **Local history and diagnostics** — review recordings, re-transcribe them, and collect useful troubleshooting details without guesswork.
+`语音 → 识别 → AI 润色 → 英文翻译 → 暂存确认 → 填入当前输入框`
 
-## Choose how it runs
+- 中文原文与英文译文同时显示，发送前可以检查。
+- 修改中文后，英文会在约 600 ms 防抖后自动重新翻译。
+- 英文译文也可以手动微调。
+- 纯英文或数字内容不会重复调用翻译。
 
-| Mode | Best for | Data flow |
+### 2. 手动输入实时翻译
+
+默认按 `Alt+Y` 打开暂存窗口。不方便说话时，直接输入中文即可实时得到英文，确认后再填入当前应用。
+
+![手动输入中文并实时翻译为英文](docs/images/translate/manual-translation.png)
+
+### 3. 译文确认后再上屏
+
+翻译不会未经确认就直接发出。暂存窗口提供以下操作：
+
+| 操作 | 结果 |
+| --- | --- |
+| `Enter` | 填入英文译文 |
+| `Ctrl+Enter` | 填入中文原文 |
+| `Shift+Enter` | 换行 |
+| `Esc` | 取消，不填入任何内容 |
+
+### 4. 快捷键与触发方式都能修改
+
+语音输入、语音翻译和手动翻译均支持自定义按键。翻译功能还可以选择长按、点按或连击触发，修改后立即生效。
+
+![快捷键和触发方式设置](docs/images/translate/shortcut-settings.png)
+
+> 截图展示的是一组自定义配置；首次安装时请以应用设置页显示的实际键位为准。
+
+## 原版能力简述
+
+本项目保留了 SayIt 的全局语音输入、AI 文本润色、云端语音识别、悬浮窗反馈、历史记录和中英文界面等基础能力。普通语音输入仍可将润色后的原文直接填入任意可输入文字的应用。
+
+![普通语音输入效果](docs/images/translate/voice-input.png)
+
+原版 SayIt 的完整功能、服务端部署和详细文档，请查看原作者仓库：[crosswk/SayIt](https://github.com/crosswk/SayIt)。
+
+## 默认快捷键
+
+| 功能 | 默认按键 | 默认触发方式 |
 | --- | --- | --- |
-| **Cloud API mode** | The best balance for personal use | Your PC talks directly to the ASR and AI providers you configure. No SayIt server is involved. |
-| **Server mode** | Teams and managed deployments | Audio is processed by a SayIt backend you control—or by the public trial server for a quick start. |
+| 按住说话，填入原文 | 左 `Alt` | 长按 |
+| 免提语音输入 | 右 `Alt` | 点按开始，再按一次结束 |
+| 语音输入并翻译 | `Delete` | 长按 |
+| 手动输入并翻译 | `Alt+Y` | 点按 |
 
-Cloud recognition supports Doubao, Qwen, OpenAI, Gemini, OpenRouter, Xiaomi MiMo, and Groq Whisper, plus any OpenAI-compatible service at an address you supply; AI cleanup works with DeepSeek, Qwen, Doubao, Zhipu GLM, MiMo, Groq, Ollama, and any OpenAI-compatible endpoint.
+所有按键都可以在“设置 → 键盘快捷键”中修改。`Delete` 使用长按判定，短按仍可正常删除文字。
 
-## A closer look
+## 安装与使用
 
-<div align="center">
+1. 从 [Releases](https://github.com/niwoxijifiy91-bot/SayIt-Translate/releases/latest) 下载 Windows x64 安装包。
+2. 在“语音引擎”中配置云端 ASR，或使用可用的 SayIt 服务器。
+3. 在“AI 供应商”中配置模型、API 地址和 API Key；润色与翻译共用这套配置。
+4. 在任意输入框中使用语音输入或翻译快捷键。
 
-<img src="docs/images/readme/home-en.png" width="760" alt="SayIt home screen showing dictation stats and a feedback box">
+> 此二开版本已移除客户端本地 ASR，语音识别需要云端 ASR 或 SayIt 服务器；翻译需要可用的 AI 供应商。
 
-*Home — dictation stats, the active shortcut, and a feedback box that carries your last transcript.*
+## 开发
 
-<br>
-
-<img src="docs/images/readme/voice-engine-en.png" width="760" alt="Voice engine screen from the original SayIt project">
-
-*Voice engine — screenshot from the original SayIt project; this fork keeps Cloud API and Server modes and removes local ASR.*
-
-<br>
-
-<img src="docs/images/readme/ai-cleanup-en.png" width="760" alt="AI cleanup settings showing built-in presets and per-app rules">
-
-*AI cleanup — every built-in preset is editable, and per-app rules can switch presets based on the app you are typing into.*
-
-<br>
-
-<img src="docs/images/readme/ai-providers-en.png" width="760" alt="AI providers grid with measured response times on each model card">
-
-*AI providers — bring your own keys, add any OpenAI-compatible endpoint, and test round-trip latency on every card.*
-
-<br>
-
-<img src="docs/images/readme/history-en.png" width="760" alt="History list with search, raw ASR text, timings, and playback controls">
-
-*History — searchable local records. Expand one to see the raw ASR text, timings, audio playback, and re-transcribe.*
-
-<br>
-
-<img src="docs/images/readme/appearance-en.png" width="760" alt="Appearance settings with app themes, waveform themes, overlay width, and a live overlay preview">
-
-*Appearance — three app themes, waveform styles, overlay width, and live captions with a preview of the overlay.*
-
-</div>
-
-## What this fork adds
-
-- Hold `Delete` to dictate, review the source text and live English translation, then confirm before insertion.
-- Press `Alt+Y` to open the manual translation window and translate Chinese as you type.
-- Press `Enter` to insert English, `Ctrl+Enter` to insert the source text, `Esc` to cancel, or `Shift+Enter` for a new line.
-- Configure the keys and choose hold, tap, or multi-press triggering for each input mode.
-
-Translation uses the existing SayIt AI-provider pipeline. Local ASR has been removed from this fork, so configure a cloud speech-recognition provider and an AI provider before use.
-
-## Get started
-
-1. Download the latest [Windows installer for this fork](https://github.com/niwoxijifiy91-bot/SayIt/releases/latest).
-2. Open SayIt and choose a voice engine. The default public server is enough for a quick trial.
-3. Press the configured shortcut in any app and speak. By default you press once to start and again to finish; hold-to-talk is available too, under a separate shortcut.
-
-For regular use, add your own cloud ASR and AI-provider keys from the in-app settings. The provider console links are available beside each key field.
-
-## Self-hosting
-
-The backend combines FastAPI, WebSocket streaming, Qwen3-ASR, and an optional OpenAI-compatible cleanup model. Docker Compose is the recommended deployment path.
-
-```bash
-git clone https://github.com/niwoxijifiy91-bot/SayIt.git
-cd SayIt/server
-cp config.example.yaml config.yaml
-cp .env.example .env
-# Add your provider and deployment settings to .env/config.yaml
-docker compose up -d --build
-```
-
-GPU speech recognition requires an NVIDIA GPU; 16 GB or more of VRAM is recommended for the default server model. See the [server guide](server/README.md) for configuration, deployment, security, and API details.
-
-## Performance reference
-
-Qwen3-ASR-1.7B with vLLM on an AWS EC2 `g5.xlarge` (NVIDIA A10G 24 GB):
-
-| Audio length | ASR latency | RTF |
-| --- | --- | --- |
-| 30 seconds | ~0.8 s | 0.025 |
-| 1 minute | ~1.6 s | 0.026 |
-| 2 minutes | ~2.1 s | 0.017 |
-| 3 minutes | ~2.5 s | 0.014 |
-| 5 minutes | ~3.0 s | 0.010 |
-
-## Development
-
-### Desktop client
+客户端基于 Tauri v2、React、TypeScript 与 Rust。
 
 ```bash
 cd client
@@ -143,61 +98,19 @@ npm install
 npm run tauri dev
 ```
 
-Requirements: Node.js 18+, Rust 1.75+, and Visual Studio Build Tools with MSVC. This fork removes local ASR, so CMake and the Vulkan SDK are not required.
+构建环境需要 Node.js 18+、Rust 1.75+ 和包含 MSVC 的 Visual Studio Build Tools。由于本版本已移除本地 ASR，因此不需要 CMake 或 Vulkan SDK。
 
-On non-English Windows installations, set `CL=/utf-8` before building so MSVC reads UTF-8 source files correctly.
-
-### Server
+测试与构建：
 
 ```bash
-cd server
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-cd backend
-uvicorn app.main:app --port 8000
+cd client
+npm test
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Requirements: Python 3.10+ and, for GPU inference, an NVIDIA GPU with CUDA.
+## 开源说明与致谢
 
-## Project layout
+本项目基于 **crosswk** 开发的开源项目 [SayIt](https://github.com/crosswk/SayIt) 进行二次开发，感谢原作者提供完整的语音输入基础能力。
 
-```text
-SayIt/
-├── client/       # Tauri + React desktop client
-├── server/       # FastAPI backend, gateway, web demo, and deployment files
-├── docs/         # User guides and images
-└── dev-docs/     # Internal development notes
-```
-
-## Community
-
-The QR codes below belong to the original SayIt community. For this fork, open an [issue in this repository](https://github.com/niwoxijifiy91-bot/SayIt/issues).
-
-<div align="center">
-
-<table>
-<tr>
-<td align="center"><img src="docs/images/readme/wechat-official-account.jpg" width="220" alt="SayIt WeChat official account QR code"><br>Official account</td>
-<td align="center"><img src="docs/images/readme/wechat-group.jpg" width="220" alt="QR code for the SayIt user feedback group on WeChat"><br>User group</td>
-</tr>
-</table>
-
-</div>
-
-## Contributing
-
-Bug reports, focused pull requests, and feature discussions are welcome. Please open a [GitHub issue](https://github.com/niwoxijifiy91-bot/SayIt/issues) or read the [contribution guide](CONTRIBUTING.md) before submitting a larger change.
-
-## Contributors
-
-<!-- ALL-CONTRIBUTORS-LIST:START -->
-| [<img src="https://github.com/crosswk.png" width="60"><br><sub>crosswk (original author)</sub>](https://github.com/crosswk) | [<img src="https://github.com/niwoxijifiy91-bot.png" width="60"><br><sub>Fork maintainer</sub>](https://github.com/niwoxijifiy91-bot) | [<img src="https://avatars.githubusercontent.com/u/76263028" width="60"><br><sub>Claude (Anthropic)</sub>](https://claude.ai) |
-|:---:|:---:|:---:|
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-
-## License
-
-[GNU Affero General Public License v3.0](./LICENSE)
-
-You may use, modify, and self-host SayIt. If you distribute a modified version or run it as a network service, the corresponding source must remain available under the same license.
+二开版本继续采用 [GNU Affero General Public License v3.0](LICENSE) 开源。你可以使用、修改和分发本项目；分发修改版本或以网络服务方式提供时，应按 AGPL-3.0 提供对应源代码。
