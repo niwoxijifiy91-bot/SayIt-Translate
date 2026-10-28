@@ -10,12 +10,18 @@ export interface TranslateResult {
   ok: boolean
   /** 稳定原因码：config-incomplete / timeout / error / no-cjk */
   reason?: string
+  /** 原始错误信息（截断），便于界面给出可行动的提示。 */
+  detail?: string
   elapsedMs?: number
   provider?: string
   model?: string
 }
 
-const TRANSLATE_TIMEOUT_MS = 15_000
+const TRANSLATE_TIMEOUT_MS = 45_000
+/** 可重试错误的最大尝试次数（首次 + 2 次重试）。 */
+const TRANSLATE_MAX_ATTEMPTS = 3
+/** 重试退避间隔（毫秒）。 */
+const TRANSLATE_RETRY_BACKOFF_MS = [800, 2000]
 
 /** 是否含 CJK（汉字）字符。不含汉字时不调用引擎，直接用原文当英文。 */
 export function containsCjk(text: string): boolean {
@@ -43,35 +49,70 @@ export async function translateToEnglish(text: string): Promise<TranslateResult>
     return { text: '', ok: false, reason: 'config-incomplete', provider: config.provider, model: config.model }
   }
 
-  try {
-    const startedAt = Date.now()
-    const request = invoke<{ text: string; elapsed_ms: number }>('cloud_polish', {
-      request: {
-        text: trimmed,
-        ai_config: {
-          provider: config.provider,
-          api_url: config.apiUrl,
-          api_key: config.apiKey,
-          model: config.model,
+  const startedAt = Date.now()
+
+  /** 单次调用；失败返回 { ok:false, reason, detail }，成功返回 { ok:true, text }。 */
+  const tryOnce = async (): Promise<TranslateResult> => {
+    try {
+      const request = invoke<{ text: string; elapsed_ms: number }>('cloud_polish', {
+        request: {
+          text: trimmed,
+          ai_config: {
+            provider: config.provider,
+            api_url: config.apiUrl,
+            api_key: config.apiKey,
+            model: config.model,
+          },
+          system_prompt: TRANSLATE_SYSTEM_PROMPT,
+          text_context: null,
         },
-        system_prompt: TRANSLATE_SYSTEM_PROMPT,
-        text_context: null,
-      },
-    })
-    const result = await Promise.race([
-      request,
-      new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('timed out')), TRANSLATE_TIMEOUT_MS)
-      }),
-    ])
+      })
+      const result = await Promise.race([
+        request,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('timed out')), TRANSLATE_TIMEOUT_MS)
+        }),
+      ])
+      return { text: result.text, ok: true }
+    } catch (error) {
+      return {
+        text: '',
+        ok: false,
+        reason: String(error).includes('timed out') ? 'timeout' : 'error',
+        detail: String(error).slice(0, 300),
+      }
+    }
+  }
+
+  // 网络抖动 / 上游瞬时 5xx 会整单失败：timeout 与 error 自动重试（退避），
+  // 配置缺失与纯无汉字不重试（前者改了也没用，后者根本没发请求）。
+  let last: TranslateResult = { text: '', ok: false, reason: 'error' }
+  for (let attempt = 0; attempt < TRANSLATE_MAX_ATTEMPTS; attempt += 1) {
+    last = await tryOnce()
+    if (last.ok) break
+    if (last.reason !== 'timeout' && last.reason !== 'error') break
+    const backoff = TRANSLATE_RETRY_BACKOFF_MS[attempt] ?? TRANSLATE_RETRY_BACKOFF_MS[TRANSLATE_RETRY_BACKOFF_MS.length - 1]
+    if (attempt < TRANSLATE_MAX_ATTEMPTS - 1) {
+      await new Promise((resolve) => setTimeout(resolve, backoff))
+    }
+  }
+
+  if (last.ok) {
     return {
-      text: result.text,
+      text: last.text,
       ok: true,
       elapsedMs: Date.now() - startedAt,
       provider: config.provider,
       model: config.model,
     }
-  } catch (error) {
-    return { text: '', ok: false, reason: String(error).includes('timed out') ? 'timeout' : 'error' }
+  }
+  return {
+    text: '',
+    ok: false,
+    reason: last.reason,
+    detail: last.detail,
+    elapsedMs: Date.now() - startedAt,
+    provider: config.provider,
+    model: config.model,
   }
 }

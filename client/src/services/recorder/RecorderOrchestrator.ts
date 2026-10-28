@@ -1337,7 +1337,16 @@ export class RecorderOrchestrator {
       this.activeMode = 'normal'
       const stagedText = text
       this.overlayService.hide()
-      void bridge.openStaging(stagedText, 'translate').catch((err) => {
+      // 二开修复：把「录音开始时刻」捕获的目标输入框句柄带给暂存窗，
+      // 避免翻译期间切窗导致提交时把文本填到错误的窗口/标签页。
+      const trTargetHwnd = this.run.currentActiveAppContext?.hwnd
+      const trFocusHwnd = this.run.currentActiveAppContext?.focusHwnd
+      addRuntimeEvent('info', 'translate', 'Open staging with recording-time hwnd', {
+        runId,
+        targetHwnd: trTargetHwnd ?? null,
+        focusHwnd: trFocusHwnd ?? null,
+      })
+      void bridge.openStaging(stagedText, 'translate', trTargetHwnd, trFocusHwnd).catch((err) => {
         addRuntimeEvent('warn', 'translate', 'Failed to open staging window; falling back to direct insertion', {
           error: String(err),
         })

@@ -160,9 +160,25 @@ export function getProbeResult() {
 
 // ─── Staging (翻译暂存窗，二开) ───
 
-/** 打开/刷新翻译暂存窗口并带去中文原文（Rust 侧同时捕获目标输入框句柄）。 */
-export function openStaging(zhText: string, mode: 'translate' | 'manual' = 'translate') {
-  return invoke<void>('open_staging', { request: { zhText, mode } })
+/**
+ * 打开/刷新翻译暂存窗口并带去中文原文。
+ * - targetHwnd / focusHwnd：录音开始时刻捕获的目标输入框句柄（translate 模式由
+ *   RecorderOrchestrator 传入，避免翻译期间切窗导致句柄过期）；缺省时 Rust 现场捕获。
+ */
+export function openStaging(
+  zhText: string,
+  mode: 'translate' | 'manual' = 'translate',
+  targetHwnd?: string,
+  focusHwnd?: string,
+) {
+  return invoke<void>('open_staging', {
+    request: {
+      zhText,
+      mode,
+      targetHwnd: targetHwnd || undefined,
+      focusHwnd: focusHwnd || undefined,
+    },
+  })
 }
 
 export function closeStaging() {
@@ -179,9 +195,18 @@ export function getStagingPayload() {
   } | null>('get_staging_payload')
 }
 
-/** 提交暂存内容到原目标输入框；raw=true 提交中文原文（Ctrl+Enter），否则提交翻译（Enter）。 */
+/** 提交暂存内容到原目标输入框；raw=true 提交中文原文（Ctrl+Enter），否则提交翻译（Enter）。
+ *  返回注入结果（ok=false 时界面保留内容并提示）。 */
+export interface StagingCommitResult {
+  ok: boolean
+  strategy?: string | null
+  reason?: string | null
+  detail?: string | null
+  uncertain?: boolean
+}
+
 export function commitStaging(text: string, targetHwnd: string, focusHwnd: string, raw: boolean) {
-  return invoke<void>('staging_commit', { request: { text, targetHwnd, focusHwnd, raw } })
+  return invoke<StagingCommitResult>('staging_commit', { request: { text, targetHwnd, focusHwnd, raw } })
 }
 
 /** 一次原生捕获同时返回录音目标上下文与插字探测结果。 */

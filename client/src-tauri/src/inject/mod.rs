@@ -609,6 +609,42 @@ unsafe fn do_inject(target: HWND, focus: HWND, text: &str, restore_clipboard: bo
     release_modifiers();
     std::thread::sleep(std::time::Duration::from_millis(15));
 
+    // ── 二开：焦点句柄有效性与归属验证（修复「填到别处/打开新页面」）──
+    // focus/target 是打开暂存窗那一刻捕获的句柄；翻译期间用户可能切过窗口/标签页，
+    // 旧句柄可能已销毁、或已不属于 target 顶层窗口。此时 SendInput Ctrl+V 会粘到
+    // 「系统当前焦点」（可能是另一个标签页/输入框），宁可不发、返回失败让前端提示。
+    if focus != target && focus.0 != std::ptr::null_mut() {
+        let mut focus_pid: u32 = 0;
+        let mut target_pid: u32 = 0;
+        let focus_alive = unsafe { GetWindowThreadProcessId(focus, Some(&mut focus_pid)) != 0 };
+        let target_alive = unsafe { GetWindowThreadProcessId(target, Some(&mut target_pid)) != 0 };
+        let belongs_to_target = unsafe { focus == target || ffi::IsChild(target, focus) != 0 };
+        if !focus_alive || !target_alive || !belongs_to_target {
+            crate::commands::system::write_log_line(&format!(
+                "[RUST] [inject] stale focus, refusing blind SendInput target={} focus={} focusAlive={} targetAlive={} belongs={} focusClass={}",
+                target.0 as isize,
+                focus.0 as isize,
+                focus_alive,
+                target_alive,
+                belongs_to_target,
+                crate::context::read_class_name(focus)
+            ));
+            return InjectResult {
+                ok: false,
+                strategy: Some("send_input".to_string()),
+                reason: Some("stale_focus".to_string()),
+                detail: Some(format!(
+                    "target={} focus={} focusAlive={} belongs={}",
+                    target.0 as isize,
+                    focus.0 as isize,
+                    focus_alive,
+                    belongs_to_target
+                )),
+                uncertain: false,
+            };
+        }
+    }
+
     // Set focus to child control if needed
     if focus != target && focus.0 != std::ptr::null_mut() {
         attach_and_set_focus(target, focus);

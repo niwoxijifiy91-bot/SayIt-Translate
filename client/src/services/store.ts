@@ -70,6 +70,8 @@ export interface HistoryRecord {
   aiModel?: string       // 例如 "deepseek-chat" / "qwen2.5:7b"
   aiSource?: 'server' | 'custom' | 'none'
   aiStatus?: 'applied' | 'skipped' | 'unavailable' | 'failed'
+  /** 二开：翻译暂存窗写入的记录来源（Delete 语音翻译 / 手动输入翻译）；无该字段 = 录音记录。 */
+  translationSource?: 'translate' | 'manual'
 }
 
 export type HistoryFailReasonCode =

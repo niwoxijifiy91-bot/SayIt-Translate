@@ -18,6 +18,13 @@ pub struct OpenStagingRequest {
     zh_text: String,
     /// 来源模式：translate（Delete 语音） / manual（Alt+Y 手动，M3 用）
     mode: String,
+    /// 录音开始时刻捕获的目标输入框窗口句柄（translate 模式由前端传入；
+    /// 不传时退化为打开暂存窗这一刻现场捕获）。手动模式无录音，不传。
+    #[serde(default)]
+    target_hwnd: Option<String>,
+    /// 同上，焦点控件句柄。
+    #[serde(default)]
+    focus_hwnd: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -42,7 +49,16 @@ pub fn get_staging_payload() -> Option<StagingPayload> {
 /// target/focus 在打开瞬间捕获：此后用户编辑期间焦点在暂存窗上，不能等到提交时再抓。
 #[tauri::command]
 pub async fn open_staging(app: AppHandle, request: OpenStagingRequest) -> Result<(), String> {
-    let ctx = capture_context("staging");
+    // 目标输入框句柄优先用调用方传入的（录音开始时刻捕获，见 RecorderOrchestrator
+    // 的 handleTextInsertion），否则现场捕获 —— 否则翻译期间用户切窗会导致句柄过期，
+    // 提交时把文本填到错误的窗口/标签页。
+    let (target_hwnd, focus_hwnd) = match (request.target_hwnd.clone(), request.focus_hwnd.clone()) {
+        (Some(t), Some(f)) if !t.is_empty() && !f.is_empty() => (t, f),
+        _ => {
+            let ctx = capture_context("staging");
+            (ctx.hwnd, ctx.focus_hwnd)
+        }
+    };
 
     let window = match app.get_webview_window("staging") {
         Some(window) => window,
@@ -68,8 +84,8 @@ pub async fn open_staging(app: AppHandle, request: OpenStagingRequest) -> Result
     let payload = StagingPayload {
         zh_text: request.zh_text,
         mode: request.mode,
-        target_hwnd: ctx.hwnd,
-        focus_hwnd: ctx.focus_hwnd,
+        target_hwnd: target_hwnd.clone(),
+        focus_hwnd: focus_hwnd.clone(),
     };
     *LAST_STAGING_PAYLOAD.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(payload.clone());
     window.emit("staging-payload", payload.clone()).map_err(|e| format!("staging emit failed: {e}"))?;
@@ -112,7 +128,7 @@ pub struct CommitStagingRequest {
 /// 提交暂存内容：先隐藏暂存窗把焦点交还目标窗口，再向原输入框注入文本。
 /// 隐藏与注入之间留 160ms，让 Windows 完成前台切换；注入走已探测的 hwnd 定向路径。
 #[tauri::command]
-pub async fn staging_commit(app: AppHandle, request: CommitStagingRequest) -> Result<(), String> {
+pub async fn staging_commit(app: AppHandle, request: CommitStagingRequest) -> Result<crate::inject::InjectResult, String> {
     if let Some(window) = app.get_webview_window("staging") {
         let _ = window.hide();
     }
@@ -127,16 +143,16 @@ pub async fn staging_commit(app: AppHandle, request: CommitStagingRequest) -> Re
         focus
     ));
 
-    // 注入是阻塞的（SendInput / clipboard），放后台线程避免卡 Tauri 主线程。
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(160));
-        let result = crate::inject::inject_text_to_hwnd(&request.text, target, focus, false);
-        write_log_line(&format!(
-            "[staging] inject ok={} strategy={:?} reason={:?}",
-            result.ok, result.strategy, result.reason
-        ));
-    });
-    Ok(())
+    // 注入是阻塞的（SendInput / clipboard），单次耗时在几十毫秒级；
+    // 这里同步等待并把结果返回给前端 —— 前端需要知道是否真的填进去了
+    // （填失败时保留窗口内容并提示，而不是用户无感知地丢掉）。
+    std::thread::sleep(std::time::Duration::from_millis(160));
+    let result = crate::inject::inject_text_to_hwnd(&request.text, target, focus, false);
+    write_log_line(&format!(
+        "[staging] inject ok={} strategy={:?} reason={:?}",
+        result.ok, result.strategy, result.reason
+    ));
+    Ok(result)
 }
 
 fn staging_center(app: &AppHandle) -> (f64, f64) {

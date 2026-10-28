@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
+import * as bridge from '../services/bridge'
 import { appendDebugLog, closeStaging, commitStaging, getStagingPayload } from '../services/bridge'
 import { translateToEnglish } from '../services/translate'
 import { addRuntimeEvent } from '../services/debugLog'
+import { addHistory } from '../services/store'
 
 const DEBOUNCE_MS = 600
 
@@ -107,14 +109,80 @@ export default function StagingWindow() {
     enRef.current = value
   }
 
-  const commit = (raw: boolean) => {
+  /** 翻译成功后把中文原文 + 提交文本写入历史记录（与录音记录同库，带来源标记）。 */
+  const saveToHistory = async (zhText: string, committedText: string, sourceMode: 'translate' | 'manual') => {
+    try {
+      await addHistory({
+        id: `tr-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        timestamp: Date.now(),
+        asrText: zhText,
+        llmText: committedText,
+        asrMs: 0,
+        llmMs: 0,
+        durationSec: 0,
+        charCount: committedText.length,
+        isEmpty: false,
+        translationSource: sourceMode,
+      })
+      void bridge.emit('history-updated')
+      addRuntimeEvent('info', 'staging', 'translation saved to history', { zhChars: zhText.length, enChars: committedText.length })
+    } catch (error) {
+      addRuntimeEvent('warn', 'staging', 'Failed to save translation history', { error: String(error) })
+    }
+  }
+
+  /** 注入失败原因 → 可行动的提示文案。 */
+  const describeInjectFailure = (reason: string): string => {
+    switch (reason) {
+      case 'stale_focus': return '目标输入框已变化（可能切换过窗口/标签页），请重新定位光标后再按 Enter'
+      case 'clipboard_blocked': return '剪贴板写入被拦截（安全软件？），请手动复制粘贴'
+      case 'input_blocked_access_denied': return '目标窗口权限更高（管理员运行），请以管理员身份运行 SayIt 后重试'
+      case 'send_input_short_write': return '系统未接受模拟粘贴，请手动复制粘贴'
+      case 'not_editable': return '目标位置不可输入文字'
+      case 'no_foreground_window': return '未检测到可输入的目标窗口'
+      default: return reason || '未知原因'
+    }
+  }
+
+  const commit = async (raw: boolean) => {
     const p = payloadRef.current
     if (!p) return
+    // 翻译未完成时提交：英文框还是空的，会退回中文原文填入，用户以为是「没填上」。
+    // 明确拦截并提示，等翻译完成或手动改完英文再提交。
+    if (translateState === 'loading') {
+      setTranslateNote('翻译中，请稍候再按 Enter')
+      addRuntimeEvent('info', 'staging', 'commit blocked while translating', {})
+      return
+    }
     const text = raw ? zhRef.current : enRef.current.trim() || zhRef.current
     addRuntimeEvent('info', 'staging', 'commit requested', { raw, chars: text.length })
-    commitStaging(text, p.targetHwnd, p.focusHwnd, raw).catch((err) => {
+    try {
+      const result = await commitStaging(text, p.targetHwnd, p.focusHwnd, raw)
+      if (result.ok) {
+        addRuntimeEvent('info', 'staging', 'commit injected', { strategy: result.strategy ?? null })
+        void saveToHistory(zhRef.current, text, p.mode === 'manual' ? 'manual' : 'translate')
+        void closeStaging()
+        return
+      }
+      // 注入失败：Rust 已隐藏窗口；重新打开保留当前内容，并给出可行动的提示。
+      setTranslateNote(`未能填入：${describeInjectFailure(result.reason ?? 'unknown')}`)
+      addRuntimeEvent('warn', 'staging', 'commit inject failed', { reason: result.reason, detail: result.detail })
+      void bridge.openStaging(
+        zhRef.current,
+        p.mode === 'manual' ? 'manual' : 'translate',
+        p.targetHwnd,
+        p.focusHwnd,
+      )
+    } catch (err) {
+      setTranslateNote(`提交失败：${String(err).slice(0, 120)}`)
       addRuntimeEvent('warn', 'staging', 'commit failed', { error: String(err) })
-    })
+      void bridge.openStaging(
+        zhRef.current,
+        p.mode === 'manual' ? 'manual' : 'translate',
+        p.targetHwnd,
+        p.focusHwnd,
+      )
+    }
   }
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -128,7 +196,7 @@ export default function StagingWindow() {
       const bare = !event.ctrlKey && !event.shiftKey && !event.altKey
       if (bare || ctrl) {
         event.preventDefault()
-        commit(ctrl)
+        void commit(ctrl)
       }
     }
   }
