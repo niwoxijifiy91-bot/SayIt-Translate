@@ -1,22 +1,8 @@
 /**
- * 更新服务：检查 → 后台静默下载 → 等用户点「立即更新」，或在退出时兜底安装。
- *
- * 设计要点（改动前后的差别，别不小心改回去）：
- *
- * · **不再自动安装。** 旧实现是"发现新版 → 下载 → 3 秒后 app.exit(0) 装掉"，
- *   用户正在按住说话时会被一个关不掉的全屏遮罩糊住、然后应用自己退出。
- *   现在下载完只是把包记进 pending，安装时机交给用户（桌面提醒卡片 / 关于页）
- *   或退出路径（Rust 的 install_pending_update_on_exit）。
- *
- * · **周期检查是必需的，不是加分项。** SayIt 常驻托盘 + 开机自启，很多用户几周不重启。
- *   只在启动时查一次，等于绝大多数人永远发现不了新版本。
- *
- * · **下载要幂等。** 旧实现下完立刻安装，所以"下载了但没装"不存在；现在这是常态，
- *   已下载的包必须记到设置里（pendingUpdate），重启后靠 verify_update_package 复用，
- *   否则每次开机都会把整包重下一遍。
- *
- * 全局单例状态：关于页、左下角图标、桌面提醒都订阅同一份，共用同一把并发锁，
- * 不会出现启动自动检查与用户手动点击各下载一遍的情况。
+ * SayIt Translate disables software updates through updatePolicy.ts.
+ * Startup only clears legacy pending updates and disables the old preference.
+ * The upstream update implementation remains below for reference, but all
+ * check/download/install entry points are blocked by the build policy.
  */
 
 import { listen } from '@tauri-apps/api/event'
@@ -27,6 +13,7 @@ import { addRuntimeEvent } from '@/services/debugLog'
 import { getOfficialUpdateBaseUrl, getUpdateBaseUrl, isOfficialUpdateChannel } from '@/services/runtimeConfig'
 import { getState as getRecorderState } from '@/services/recorder'
 import { t } from '@/i18n'
+import { UPDATES_ENABLED } from './updatePolicy'
 
 /** 已下载待安装的包。持久化到设置里，重启后仍然知道装过什么。 */
 export interface PendingUpdate {
@@ -88,7 +75,7 @@ let inFlight: Promise<void> | null = null
 let checkTimer: ReturnType<typeof setInterval> | null = null
 
 // 订阅 Rust 端下载真实进度事件，驱动进度显示
-void listen<{ downloadedBytes: number; totalBytes: number; percent: number; status: string; error: string | null }>(
+if (UPDATES_ENABLED) void listen<{ downloadedBytes: number; totalBytes: number; percent: number; status: string; error: string | null }>(
   'update-download-progress',
   (event) => {
     const { percent } = event.payload
@@ -115,7 +102,7 @@ export function onAutoUpdateChange(cb: (state: AutoUpdateState) => void) {
  * 只看 pending，**不看 phase**：后台在跑周期检查的时候，待安装这件事照样成立。
  */
 export function hasPendingUpdate(state: AutoUpdateState = currentState): boolean {
-  return !!state.pending
+  return UPDATES_ENABLED && !!state.pending
 }
 
 async function savePending(pending: PendingUpdate): Promise<void> {
@@ -195,6 +182,7 @@ async function ensureDownloaded(info: VersionInfo): Promise<void> {
 
 /** 检查一次，发现新版本就在后台下载。所有触发路径最终都走这里。 */
 async function runCheckAndDownload(): Promise<void> {
+  if (!UPDATES_ENABLED) return
   if (currentState.phase === 'installing') return
   if (inFlight) { await inFlight; return }
 
@@ -250,6 +238,13 @@ async function runCheckAndDownload(): Promise<void> {
  * 在 App.tsx 挂载时调用一次。
  */
 export async function startUpdateService(): Promise<void> {
+  if (!UPDATES_ENABLED) {
+    // Clear legacy pending state as well as the preference; disabling checks alone
+    // would leave an already-downloaded upstream installer armed on older builds.
+    await clearPending()
+    await setSetting('autoCheckUpdate', false).catch(() => {})
+    return
+  }
   // 整个函数包一层：调用方是 `void startUpdateService()`，没有 catch，
   // 这里任何一处抛异常都会被 Promise 静默吞掉，表现成"更新功能毫无反应"。
   try {
@@ -316,6 +311,7 @@ export async function checkForUpdateNow(): Promise<VersionInfo | null> {
  * 调用方通过卡片或关于页的安装按钮说明重启行为；录音和转写期间禁止安装。
  */
 export async function installPendingUpdate(): Promise<void> {
+  if (!UPDATES_ENABLED) return
   const pending = currentState.pending
   if (!pending || currentState.phase === 'installing') return
   if (getRecorderState() !== 'idle') {

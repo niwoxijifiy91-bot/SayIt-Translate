@@ -161,6 +161,8 @@
   "about.title": "About",
   "about.tagline": "Voice typing with AI cleanup",
   "about.updateSection": "Updates",
+  "about.updatesDisabled": "Software updates disabled · Custom build",
+  "about.updatesDisabledHint": "This version will not check for, download or install updates, including when you exit the app.",
   "about.neverChecked": "Never checked",
   "about.lastChecked": "Last checked: {time}",
   "about.checking": "Checking for updates…",

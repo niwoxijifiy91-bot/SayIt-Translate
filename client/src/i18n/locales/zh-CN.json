@@ -161,6 +161,8 @@
   "about.title": "关于",
   "about.tagline": "语音输入，AI 润色",
   "about.updateSection": "软件更新",
+  "about.updatesDisabled": "已禁用软件更新 · 保留二开版本",
+  "about.updatesDisabledHint": "此版本不会检查、下载或安装更新，退出软件也不会自动更新。",
   "about.neverChecked": "尚未检查",
   "about.lastChecked": "上次检查：{time}",
   "about.checking": "正在检查更新...",

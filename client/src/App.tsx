@@ -19,8 +19,6 @@ import { initActivePreset } from './stores/activePreset'
 import { getSetting, setSetting } from './services/store'
 import { startUpdateService } from './features/update/autoUpdate'
 import { startWebDavBackupService } from './features/backup/autoWebdavBackup'
-import UpdateDialog from './features/update/UpdateDialog'
-import UpdateNotificationHost from './features/update/UpdateNotificationHost'
 import * as bridge from './services/bridge'
 
 export default function App() {
@@ -100,8 +98,6 @@ export default function App() {
         </main>
       </div>
       {showWelcome && <WelcomeGuide onComplete={handleWelcomeComplete} />}
-      <UpdateDialog />
-      <UpdateNotificationHost enabled={!showWelcome} />
     </div>
   )
 }

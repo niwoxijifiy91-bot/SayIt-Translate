@@ -14,6 +14,7 @@ mod defaults;
 mod net_policy;
 mod path_guard;
 mod ipc_body;
+mod update_policy;
 
 use storage::Storage;
 use window::WindowState;
@@ -536,6 +537,12 @@ fn main() {
         eprintln!("Warning: Electron data migration failed: {}", e);
     }
 
+    if let Err(e) = update_policy::clear_legacy_update_state(&storage) {
+        log::warn!("Could not clear legacy update settings: {}", e);
+    } else {
+        log::info!("[update] software updates disabled for SayIt Translate; legacy pending state cleared");
+    }
+
     // Clean up expired audio files on startup
     cleanup_expired_audio(&storage);
 
@@ -928,9 +935,7 @@ fn main() {
                 }
             }
         })
-        // 用 build + run 而不是直接 run：需要在 RunEvent::Exit 上挂"退出时兜底安装更新"。
-        // 用户没点更新图标就直接关掉 SayIt 时，在这里把已下载的新版静默装掉，
-        // 下次打开即是新版 —— 否则更新完全依赖用户主动点击，不点的人永远留在旧版。
+        // 保留退出处理入口；二开构建策略在原生层禁止启动任何更新安装包。
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {

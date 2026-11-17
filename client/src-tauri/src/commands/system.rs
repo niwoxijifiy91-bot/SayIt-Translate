@@ -406,6 +406,7 @@ pub async fn download_update(
     url: String,
     sha512: Option<String>,
 ) -> Result<String, String> {
+    crate::update_policy::ensure_updates_enabled()?;
 
     let fail = |msg: String| {
         write_log_line(&format!("[update] download refused: {}", msg));
@@ -675,6 +676,7 @@ pub fn install_downloaded_update(
     app: AppHandle,
     storage: State<'_, Storage>,
 ) -> Result<(), String> {
+    crate::update_policy::ensure_updates_enabled()?;
     let checked = checked_pending_installer(storage.inner(), &file_path).map_err(|e| {
         write_log_line(&format!("[update] install refused: {}", e));
         e
@@ -719,6 +721,9 @@ pub fn install_downloaded_update(
 /// 理由是退出路径不能卡几百毫秒；实际 15 MB 的包算一次 SHA-512 是几十毫秒，
 /// 而"只看文件在不在"正是恶意备份能让退出时运行任意 exe 的那个口子（审核 S3）。
 pub fn install_pending_update_on_exit(app: &AppHandle) {
+    if crate::update_policy::ensure_updates_enabled().is_err() {
+        return;
+    }
     use std::sync::atomic::Ordering;
     use tauri::Manager;
 

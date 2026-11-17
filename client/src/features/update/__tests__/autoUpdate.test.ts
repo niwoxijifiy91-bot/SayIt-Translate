@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Keep coverage of the retained upstream implementation; fork policy is covered
+// separately with the real (disabled) build policy.
+vi.mock('../updatePolicy', () => ({ UPDATES_ENABLED: true }))
+
 const mocks = vi.hoisted(() => ({
   install: vi.fn(),
   recorder: vi.fn(),
